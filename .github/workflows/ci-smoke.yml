@@ -26,6 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -e aipv/heart_valve_project
 
       - name: Run pytest smoke test
         run: |
