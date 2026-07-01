@@ -1,0 +1,8 @@
+numpy==2.4.6
+pandas==3.0.3
+scikit-learn==1.9.0
+scipy==1.17.1
+joblib==1.5.3
+# Optional heavy dependency (lazy-imported in models/forwardmodel.py)
+# torch==2.2.0
+pytest==9.0.3

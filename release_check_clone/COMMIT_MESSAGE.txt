@@ -1,0 +1,20 @@
+Commit: ValveBench dataset & schema cleanup, RNG refactor, splits
+
+Summary:
+- Replaced global np.random with np.random.default_rng() for reproducible RNG
+- Removed iterrows() usage; vectorized record iteration
+- Added explicit PATIENT_COLUMNS and SCAFFOLD_COLUMNS and DATASET_VERSION v0.1
+- Introduced SimulationConfig dataclass for simulation constants
+- Improved growth and noise models (log1p BSA and heteroscedastic noise)
+- Replaced alternating CSV with separate patient/scaffold/merged exports
+- Regenerated synthetic datasets and created canonical versioned CSVs
+- Updated valvebench schema to only include Valve_t0 and Valve_t12
+- Added dataset splits utility (`valvebench/datasets/splits.py`) and smoke test
+- Added `requirements.txt` and `data/synthetic/README.md`
+
+Suggested commit command:
+
+    git add -A
+    git commit -m "ValveBench: RNG, schema, dataset v0.1, splits, and docs"
+
+Suggested PR description: include the above summary and note that `torch` is lazy-imported and optional for downstream training.
