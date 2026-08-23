@@ -13,6 +13,7 @@ dependencies = [
     "pandas==3.0.3",
     "scikit-learn==1.9.0",
     "scipy==1.17.1",
+    "joblib==1.5.3",
 ]
 
 [project.scripts]
@@ -20,6 +21,15 @@ valvebench = "valvebench.cli:main"
 
 [project.optional-dependencies]
 extra = ["pytest==9.0.3"]
+# PINNVALVE's neural models are lazy-imported so the rest of the package
+# works without torch installed; install this extra to train/run them.
+pinn = ["torch>=2.2"]
+# valvebench.datasets.imaging (MMWHS/ImageCHD/SegTHOR NIfTI loaders, NIH-3D
+# STL loader) lazy-imports nibabel/trimesh; install this extra to use them.
+imaging = ["nibabel>=5", "trimesh>=4"]
+# valvebench.evaluation.plots lazy-imports matplotlib; install this extra to
+# generate figures.
+viz = ["matplotlib>=3.8"]
 
 [tool.setuptools.packages.find]
 where = ["."]

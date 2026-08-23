@@ -1,5 +1,4 @@
 import argparse
-from pathlib import Path
 
 from .evaluation.generate_leaderboard import generate_leaderboard
 from .pipeline import run_pipeline
@@ -10,10 +9,10 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     run_parser = subparsers.add_parser("run")
-    run_parser.add_argument("--all", action="store_true", help="Run the full benchmark and regenerate the leaderboard")
-    run_parser.add_argument("--model", default="linear", help="Model name to run")
-    run_parser.add_argument("--n-samples", type=int, default=80, help="Number of synthetic samples")
-    run_parser.add_argument("--seed", type=int, default=7, help="Random seed")
+    run_parser.add_argument("--all", action="store_true", help="Run every registered model (ID+OOD, 5 seeds) and regenerate leaderboard.md")
+    run_parser.add_argument("--model", default="linear", help="Model name to run (used unless --all is given)")
+    run_parser.add_argument("--n-samples", type=int, default=80, help="Number of synthetic samples (single-model run only)")
+    run_parser.add_argument("--seed", type=int, default=7, help="Random seed (single-model run only)")
     return parser
 
 
@@ -22,11 +21,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.command == "run" and args.all:
-        for model_name in ["linear", "ridge", "mlp", "pinn"]:
-            metrics = run_pipeline(model_name=model_name, n_samples=args.n_samples, seed=args.seed)
-            print(f"{model_name}: MAE={metrics['MAE']:.4f}, MSE={metrics['MSE']:.4f}")
-        generate_leaderboard(n_samples=args.n_samples, seed=args.seed)
-        print("Leaderboard regenerated.")
+        print("Running every registered model across 5 seeds (ID + OOD)...")
+        output = generate_leaderboard()
+        print(output.read_text(encoding="utf-8"))
+        print(f"Leaderboard regenerated: {output}")
         return 0
 
     if args.command == "run":

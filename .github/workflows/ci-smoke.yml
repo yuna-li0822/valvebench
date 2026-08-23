@@ -25,9 +25,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -e aipv/heart_valve_project
+          pip install -e "aipv/heart_valve_project[extra]"
 
       - name: Run pytest smoke test
         run: |
-          python -m pytest -q tests/test_smoke.py
+          python -m pytest -q aipv/heart_valve_project/tests/test_smoke.py

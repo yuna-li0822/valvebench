@@ -1,23 +1,11 @@
-"""Ridge regression baseline (numpy implementation)."""
-import numpy as np
+"""Re-exports the canonical, tested Ridge baseline under this package's
+naming convention. An earlier version of this file had its own closed-form
+ridge solve with no feature standardization, meaning `alpha` penalized
+features by their raw (arbitrary) scale rather than comparably -- the same
+class of preprocessing bug fixed in
+`valvebench.models.ridge.RidgeRegression` (see RESULTS.md). Keeping two
+divergent implementations around is a trap; this re-exports the fixed one.
+"""
+from ..models.ridge import RidgeRegression as RidgeBaseline
 
-
-class RidgeBaseline:
-    def __init__(self, alpha=1.0):
-        self.alpha = alpha
-        self.W = None
-        self.b = None
-
-    def fit(self, X, Y):
-        X = np.asarray(X)
-        Y = np.asarray(Y)
-        n, d = X.shape
-        # Closed-form ridge: W = (X^T X + alpha I)^{-1} X^T Y
-        XtX = X.T.dot(X)
-        reg = self.alpha * np.eye(d)
-        self.W = np.linalg.solve(XtX + reg, X.T.dot(Y))
-        return self
-
-    def predict(self, X):
-        X = np.asarray(X)
-        return X.dot(self.W)
+__all__ = ["RidgeBaseline"]
