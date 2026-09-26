@@ -1,0 +1,2 @@
+is_placeholder,sample_id,Suture_Count,Material_Stiffness,Dissolution_Rate,Fold_Angle,t_months,Diameter_mm,mapping_notes
+TRUE,0,7,1.0,0.15,35.0,0.0,0.0,"REPLACE: one row per (design, simulated timepoint). See experiments/comsol_validation.py docstring for what each design column means in THIS project's parameterization and how to map your COMSOL setup onto it."
