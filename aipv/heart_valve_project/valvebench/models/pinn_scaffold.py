@@ -85,7 +85,8 @@ THETA_COLUMNS = ["Suture_Count", "Material_Stiffness", "Dissolution_Rate", "Fold
 # operating on the same input/output scale.
 _THETA_RANGES = np.array([[4.0, 11.0], [0.5, 2.5], [0.05, 0.3], [15.0, 60.0]])
 _D_MEAN, _D_SCALE = 12.0, 6.0
-_SIGMA_MEAN, _SIGMA_SCALE = 150.0, 150.0
+# Stress head normalization is smac.SIGMA_REF (150 MPa by default), read at call time
+# so a material-constant swap (smac.material_constants) rescales it consistently.
 
 
 def _normalize_theta(theta_raw):
@@ -111,7 +112,7 @@ if _TORCH_AVAILABLE:
             x = torch.cat([theta_norm, t_scaled], dim=1)
             raw = self.net(x)
             d_pred = raw[:, 0:1] * _D_SCALE + _D_MEAN
-            sigma_pred = raw[:, 1:2] * _SIGMA_SCALE + _SIGMA_MEAN
+            sigma_pred = raw[:, 1:2] * smac.SIGMA_REF + smac.SIGMA_REF
             xi_pred = torch.sigmoid(raw[:, 2:3])
             return d_pred, sigma_pred, xi_pred
 
@@ -219,7 +220,7 @@ def train_scaffold_pinn(train_df: pd.DataFrame, config: TrainConfig = TrainConfi
         data_loss = torch.mean((d_pred - d_true) ** 2)
         physics_loss = (
             torch.mean(kinetics_res ** 2)
-            + torch.mean((constitutive_res / _SIGMA_SCALE) ** 2)
+            + torch.mean((constitutive_res / smac.SIGMA_REF) ** 2)
             + torch.mean(mono_res)
             + torch.mean(yield_res)
         )

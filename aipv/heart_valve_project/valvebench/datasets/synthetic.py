@@ -160,8 +160,8 @@ def scaffold_state_at_sma(
     material_stiffness,
     dissolution_rate,
     fold_angle,
-    sigma_ref: float = SMA_SIGMA_REF,
-    suture_ref: float = SMA_SUTURE_REF,
+    sigma_ref=None,
+    suture_ref=None,
 ):
     """Diameter, constraint stress, and martensite fraction at time t under
     the full Brinson/Auricchio-Sacco phase-fraction constitutive model
@@ -189,6 +189,8 @@ def scaffold_state_at_sma(
     diameter claim) is the honest way to connect material-level kinetics to
     device-level diameter for a strut/lattice scaffold.
     """
+    sigma_ref = smac.SIGMA_REF if sigma_ref is None else sigma_ref
+    suture_ref = smac.SUTURE_REF if suture_ref is None else suture_ref
     d0 = sma.baseline_diameter(fold_angle)
     d_max = sma.saturation_diameter(fold_angle, material_stiffness)
 
@@ -429,8 +431,8 @@ def generate_scaffold_trajectories_sma(
     timepoints=SCAFFOLD_TIMEPOINTS_MONTHS,
     param_ranges=None,
     noise_scale: float = 0.1,
-    sigma_ref: float = SMA_SIGMA_REF,
-    suture_ref: float = SMA_SUTURE_REF,
+    sigma_ref=None,
+    suture_ref=None,
 ):
     """Long-format scaffold expansion trajectories driven by the full
     Brinson/Auricchio-Sacco phase-fraction constitutive model
@@ -465,8 +467,8 @@ def ood_corner_dataset_sma(
     timepoints=SCAFFOLD_TIMEPOINTS_MONTHS,
     seed=123,
     noise_scale: float = 0.1,
-    sigma_ref: float = SMA_SIGMA_REF,
-    suture_ref: float = SMA_SUTURE_REF,
+    sigma_ref=None,
+    suture_ref=None,
 ):
     """SMA-constitutive-model counterpart of `ood_corner_dataset`, for
     evaluating ScaffoldPINN's OOD generalization.
@@ -498,8 +500,8 @@ def interior_train_val_test_split_sma(
     test_frac: float = 0.2,
     timepoints=SCAFFOLD_TIMEPOINTS_MONTHS,
     noise_scale: float = 0.1,
-    sigma_ref: float = SMA_SIGMA_REF,
-    suture_ref: float = SMA_SUTURE_REF,
+    sigma_ref=None,
+    suture_ref=None,
 ):
     """Generates `n_samples` scaffold designs from INTERIOR_PARAM_RANGES
     (the SMA constitutive model) and splits them by `sample_id` -- so every
@@ -547,8 +549,8 @@ def ood_shell_dataset(
     seed: int = 999,
     timepoints=SCAFFOLD_TIMEPOINTS_MONTHS,
     noise_scale: float = 0.1,
-    sigma_ref: float = SMA_SIGMA_REF,
-    suture_ref: float = SMA_SUTURE_REF,
+    sigma_ref=None,
+    suture_ref=None,
 ):
     """Random scaffold designs drawn uniformly from FULL_PARAM_RANGES,
     rejection-sampled to exclude anything inside INTERIOR_PARAM_RANGES.

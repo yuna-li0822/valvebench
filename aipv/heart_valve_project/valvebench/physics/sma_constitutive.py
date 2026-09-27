@@ -57,6 +57,7 @@ valvebench.physics.sma. The physics genuinely drives the *shape and timing*
 of the recovery curve; it is not a literal strain-equals-diameter claim.
 """
 
+import contextlib
 import math
 
 E_A = 60_000.0       # MPa, austenite elastic modulus (representative, ~60 GPa)
@@ -75,13 +76,58 @@ SIGMA_AF = 40.0       # MPa, reverse transformation finish stress (< SIGMA_AS)
 SIGMA_REF = 150.0
 SUTURE_REF = 7.0
 
+# A second, literature-anchored constant set for robustness checks. Sources:
+#  - E_A, E_M, SIGMA_AS (= "start of transformation unloading stress"),
+#    SIGMA_AF (= "end of transformation unloading stress"): Bernini M, et al.
+#    (2023) PLoS One 18(8):e0283492, Table 6 (nitinol parameters "determined
+#    from experimental tests in a previous work", used with the Auricchio &
+#    Taylor superelastic model): 47 GPa, 20 GPa, 150 MPa, 115 MPa.
+#  - EPSILON_L = 6%: the most commonly reported recoverable strain for NiTi
+#    (range 5.5-8%) in the review of Table 3, PMC10638093.
+#  - SIGMA_REF: NOT from a paper. It is rescaled by SIGMA_AS(lit)/SIGMA_AS(default)
+#    = 1.5 so the design box covers the same range relative to the
+#    transformation window as the default constants do (SIGMA_REF/SIGMA_AS = 1.5).
+# The transformation window here (35 MPa) is narrower than the default (60 MPa).
+LITERATURE_NITINOL = {
+    "E_A": 47_000.0,
+    "E_M": 20_000.0,
+    "EPSILON_L": 0.06,
+    "SIGMA_AS": 150.0,
+    "SIGMA_AF": 115.0,
+    "SIGMA_REF": 225.0,
+}
+_CONSTANT_NAMES = ("E_A", "E_M", "EPSILON_L", "SIGMA_AS", "SIGMA_AF", "SIGMA_REF", "SUTURE_REF")
 
-def phase_modulus(xi, e_a: float = E_A, e_m: float = E_M):
+
+@contextlib.contextmanager
+def material_constants(preset=None, **overrides):
+    """Temporarily swap this module's material constants, e.g.
+    `with material_constants(LITERATURE_NITINOL): ...`. Functions here read
+    the constants at call time, so data generation and the PINN physics loss
+    both follow the swap; the previous values are restored on exit.
+    """
+    values = dict(preset or {})
+    values.update(overrides)
+    unknown = set(values) - set(_CONSTANT_NAMES)
+    if unknown:
+        raise KeyError(f"unknown material constants: {sorted(unknown)}")
+    g = globals()
+    previous = {k: g[k] for k in values}
+    g.update(values)
+    try:
+        yield
+    finally:
+        g.update(previous)
+
+
+def phase_modulus(xi, e_a=None, e_m=None):
     """E(xi): linear interpolation between austenite and martensite modulus."""
+    e_a = E_A if e_a is None else e_a
+    e_m = E_M if e_m is None else e_m
     return e_a + xi * (e_m - e_a)
 
 
-def reverse_phase_fraction(sigma, xi_m0=1.0, sigma_as: float = SIGMA_AS, sigma_af: float = SIGMA_AF):
+def reverse_phase_fraction(sigma, xi_m0=1.0, sigma_as=None, sigma_af=None):
     """Brinson cosine reverse-transformation kinetics, xi(sigma).
 
     Works on python floats, numpy arrays, or torch tensors: only +, -, *, /
@@ -89,27 +135,31 @@ def reverse_phase_fraction(sigma, xi_m0=1.0, sigma_as: float = SIGMA_AS, sigma_a
     so the same function backs both the numpy data generator and the torch
     physics loss, guaranteeing they agree by construction.
     """
+    sigma_as = SIGMA_AS if sigma_as is None else sigma_as
+    sigma_af = SIGMA_AF if sigma_af is None else sigma_af
     frac = (sigma_as - sigma) / (sigma_as - sigma_af)
     frac = _clip01(frac)
     return xi_m0 / 2.0 * (_cos(math.pi * frac) + 1.0)
 
 
-def constitutive_stress(epsilon, xi, e_a: float = E_A, e_m: float = E_M, epsilon_l: float = EPSILON_L):
+def constitutive_stress(epsilon, xi, e_a=None, e_m=None, epsilon_l=None):
     """sigma = E(xi) * (epsilon - xi*epsilon_L): stress implied by a given
     (strain, phase fraction) state.
     """
+    epsilon_l = EPSILON_L if epsilon_l is None else epsilon_l
     return phase_modulus(xi, e_a, e_m) * (epsilon - xi * epsilon_l)
 
 
-def constitutive_strain(sigma, xi, e_a: float = E_A, e_m: float = E_M, epsilon_l: float = EPSILON_L):
+def constitutive_strain(sigma, xi, e_a=None, e_m=None, epsilon_l=None):
     """Inverse of constitutive_stress: epsilon implied by a given (stress,
     phase fraction) state. Used by the data generator, which knows
     sigma(t) and xi(t) in closed form and needs epsilon(t).
     """
+    epsilon_l = EPSILON_L if epsilon_l is None else epsilon_l
     return sigma / phase_modulus(xi, e_a, e_m) + xi * epsilon_l
 
 
-def constitutive_residual(sigma_pred, epsilon_pred, xi_pred, e_a: float = E_A, e_m: float = E_M, epsilon_l: float = EPSILON_L):
+def constitutive_residual(sigma_pred, epsilon_pred, xi_pred, e_a=None, e_m=None, epsilon_l=None):
     """Residual of the stress-strain closure; zero exactly on a state that
     satisfies it. Framework-agnostic and takes predictions directly (no
     autograd needed -- unlike the ODE residual in valvebench.physics.sma,
@@ -118,7 +168,7 @@ def constitutive_residual(sigma_pred, epsilon_pred, xi_pred, e_a: float = E_A, e
     return sigma_pred - constitutive_stress(epsilon_pred, xi_pred, e_a, e_m, epsilon_l)
 
 
-def kinetics_residual(xi_pred, sigma_pred, xi_m0=1.0, sigma_as: float = SIGMA_AS, sigma_af: float = SIGMA_AF):
+def kinetics_residual(xi_pred, sigma_pred, xi_m0=1.0, sigma_as=None, sigma_af=None):
     """Residual of the Brinson reverse-kinetics law; zero exactly when
     xi_pred equals what the cosine law prescribes for sigma_pred.
     """
