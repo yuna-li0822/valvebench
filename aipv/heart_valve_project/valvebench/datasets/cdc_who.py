@@ -18,7 +18,9 @@ user-downloaded file instead, matching the bring-your-own-local-path
 convention used by the imaging loaders (valvebench.datasets.imaging).
 """
 import hashlib
+import math
 import os
+from functools import lru_cache
 import urllib.request
 from pathlib import Path
 from typing import Tuple
@@ -31,6 +33,10 @@ CDC_TABLES = {
     "stature_for_age": "statage.csv",
     "weight_for_age": "wtage.csv",
     "bmi_for_age": "bmiagerev.csv",
+    # Birth-36 month charts (recumbent length / weight), needed because the
+    # 2-20 year tables above start at 24 months.
+    "length_for_age_infant": "lenageinf.csv",
+    "weight_for_age_infant": "wtageinf.csv",
 }
 
 # CDC's Sex coding in these files: 1 = male, 2 = female.
@@ -88,7 +94,7 @@ def load_cdc_table(table_name: str, force_download: bool = False) -> pd.DataFram
     before returning.
     """
     path, _ = download_cdc_table(table_name, force=force_download)
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, encoding="utf-8-sig")  # lenageinf.csv starts with a BOM
     df = df[df["Sex"].astype(str) != "Sex"].reset_index(drop=True)
     numeric_cols = [c for c in df.columns if c not in ("table",)]
     for col in numeric_cols:
@@ -149,6 +155,55 @@ def anthropometric_zscores(height_cm: float, weight_kg: float, bmi: float, sex: 
         "weight_zscore": zscore_for_value(weight_row["L"], weight_row["M"], weight_row["S"], weight_kg),
         "bmi_zscore": zscore_for_value(bmi_row["L"], bmi_row["M"], bmi_row["S"], bmi),
     }
+
+
+@lru_cache(maxsize=None)
+def _lms_arrays(table_name: str, sex: int):
+    df = load_cdc_table(table_name)
+    sub = df[df["Sex"] == sex].sort_values("Agemos")
+    return tuple(sub[c].to_numpy(dtype=float) for c in ("Agemos", "L", "M", "S"))
+
+
+def interpolated_lms(table_name: str, sex: int, age_months: float):
+    """(L, M, S) linearly interpolated in age between the CDC table's rows."""
+    ages, l, m, s = _lms_arrays(table_name, sex)
+    return tuple(float(np.interp(age_months, ages, arr)) for arr in (l, m, s))
+
+
+# ASSUMPTION, not from the CDC tables: the LMS tables give each variable's
+# marginal distribution only, not the height-weight correlation. 0.6 is a
+# plausible within-age value; it is a modeling choice and is stated as one.
+HEIGHT_WEIGHT_ZSCORE_CORR = 0.6
+
+
+def sample_zscores(rng, zcorr: float = HEIGHT_WEIGHT_ZSCORE_CORR):
+    """(height z, weight z), each ~N(0,1) clipped to +/-3, correlated by `zcorr`."""
+    z_h = float(np.clip(rng.normal(), -3, 3))
+    z_w = float(np.clip(zcorr * z_h + math.sqrt(1 - zcorr ** 2) * rng.normal(), -3, 3))
+    return z_h, z_w
+
+
+def height_weight_from_zscores(age_months: float, sex: int, z_h: float, z_w: float):
+    """(height_cm, weight_kg) at a given age for fixed CDC z-scores. `sex`:
+    project convention (1 = male, 0 = female). Uses the birth-36 month
+    charts below 24 months and the 2-20 year charts above (the infant height
+    chart is recumbent length, the older one is stature).
+    """
+    if age_months < 24:
+        h_table, w_table = "length_for_age_infant", "weight_for_age_infant"
+    else:
+        h_table, w_table = "stature_for_age", "weight_for_age"
+    cdc_sex = CDC_SEX_MALE if sex == 1 else CDC_SEX_FEMALE
+    height = lms_value_for_zscore(*interpolated_lms(h_table, cdc_sex, age_months), z_h)
+    weight = lms_value_for_zscore(*interpolated_lms(w_table, cdc_sex, age_months), z_w)
+    return height, weight
+
+
+def sample_height_weight(rng, age_months: float, sex: int, zcorr: float = HEIGHT_WEIGHT_ZSCORE_CORR):
+    """Draws (height_cm, weight_kg) for one child from the real CDC reference
+    distributions (see height_weight_from_zscores)."""
+    z_h, z_w = sample_zscores(rng, zcorr)
+    return height_weight_from_zscores(age_months, sex, z_h, z_w)
 
 
 def load_local_who_table(csv_path: str) -> pd.DataFrame:

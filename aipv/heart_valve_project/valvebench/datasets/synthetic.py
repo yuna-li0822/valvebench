@@ -64,6 +64,25 @@ FULL_AGE_RANGE_YRS = (1.0, 16.0)
 INTERIOR_AGE_RANGE_YRS = (3.0, 13.0)
 
 
+# Pulmonary annulus reference model from the Pediatric Heart Network normal
+# echocardiogram database: Lopez L, et al. "Relationship of Echocardiographic
+# Z Scores Adjusted for Body Surface Area to Age, Sex, Race, and Ethnicity",
+# Circ Cardiovasc Imaging 2017, Table 2 (open access, PMC5812349), pulmonary
+# annulus short-axis diameter (PVSAX): Z = [D / BSA^alpha - mean] / SD with
+# alpha = 0.50, mean = 1.91 cm, SD = 0.24 cm. (Values transcribed from that
+# table via a web fetch -- confirm against the paper before citing.) PHN used
+# the Haycock BSA formula; this project uses Mosteller, which agree to within
+# a few percent in children.
+PHN_PV_ANNULUS_ALPHA = 0.50
+PHN_PV_ANNULUS_MEAN_CM = 1.91
+PHN_PV_ANNULUS_SD_CM = 0.24
+
+
+def phn_annulus_diameter_mm(bsa, z):
+    """Pulmonary annulus diameter (mm) at BSA `bsa` for annulus z-score `z`."""
+    return 10.0 * (PHN_PV_ANNULUS_MEAN_CM + z * PHN_PV_ANNULUS_SD_CM) * bsa ** PHN_PV_ANNULUS_ALPHA
+
+
 def _valve_growth_mm_per_month(age_yrs, sex, bsa):
     base = 0.9 * np.exp(-age_yrs / 12) + 0.2
     sex_factor = np.where(sex == 1, 1.05, 1.0)
@@ -71,7 +90,7 @@ def _valve_growth_mm_per_month(age_yrs, sex, bsa):
     return base * sex_factor * bsa_factor
 
 
-def _height_weight_for_age(rng, age_yrs):
+def _height_weight_for_age(rng, age_yrs, sex=0, source="linear"):
     """Age-correlated height/weight, not independent draws.
 
     An earlier version of this generator drew Height_cm ~ Uniform(60, 180)
@@ -88,6 +107,14 @@ def _height_weight_for_age(rng, age_yrs):
     (valvebench.datasets.cdc_who) if a closer match to real percentile
     curves is wanted later.
     """
+    if source == "cdc":
+        # Real CDC reference distributions (valvebench.datasets.cdc_who), opt-in
+        # so the default path and every previously reported number stay
+        # reproducible.
+        from .cdc_who import sample_height_weight
+        return sample_height_weight(rng, age_yrs * 12.0, sex)
+    if source != "linear":
+        raise ValueError(f"anthropometrics must be 'linear' or 'cdc', got {source!r}")
     height = float(rng.normal(75.0 + age_yrs * 6.0, 6.0))
     weight = float(rng.normal(10.0 + age_yrs * 2.5, 3.0))
     return max(45.0, height), max(2.5, weight)
@@ -192,7 +219,7 @@ def _sample_age_yrs(rng, age_ranges):
     return float(rng.uniform(lo, hi))
 
 
-def generate_synthetic(N=100, seed=42, age_ranges=None):
+def generate_synthetic(N=100, seed=42, age_ranges=None, anthropometrics="linear", annulus_source="legacy"):
     """`age_ranges`: optional list of (lo, hi) year tuples to draw
     `Age_yrs` from (defaults to a single range spanning `FULL_AGE_RANGE_YRS`).
     Used to build the age-OOD split: pass `[INTERIOR_AGE_RANGE_YRS]` for
@@ -201,6 +228,10 @@ def generate_synthetic(N=100, seed=42, age_ranges=None):
     """
     if age_ranges is None:
         age_ranges = [FULL_AGE_RANGE_YRS]
+    if annulus_source not in ("legacy", "phn"):
+        raise ValueError(f"annulus_source must be 'legacy' or 'phn', got {annulus_source!r}")
+    if annulus_source == "phn" and anthropometrics != "cdc":
+        raise ValueError("annulus_source='phn' needs anthropometrics='cdc' (it tracks each child's CDC z-scores forward 12 months)")
 
     rng = np.random.RandomState(seed)
     patients = []
@@ -208,14 +239,30 @@ def generate_synthetic(N=100, seed=42, age_ranges=None):
     for i in range(N):
         age_yrs = _sample_age_yrs(rng, age_ranges)
         sex = int(rng.randint(0, 2))
-        height, weight = _height_weight_for_age(rng, age_yrs)
-        bmi = float(weight / (height / 100) ** 2)
-        bsa = float(np.sqrt((height * weight) / 3600))
         age_months = float(age_yrs * 12)
-
-        annulus_t0 = _baseline_annulus_diameter_mm(bsa) + rng.normal(0, 0.8)
-        growth_per_month = float(_valve_growth_mm_per_month(age_yrs, sex, bsa))
-        annulus_t12 = annulus_t0 + growth_per_month * 12 + rng.normal(0, 0.3)
+        if annulus_source == "phn":
+            # Literature-derived path: the child keeps the same CDC height/
+            # weight z-scores and the same annulus z-score for 12 months
+            # ("tracking" -- an assumption); the annulus follows the PHN
+            # D = (mean + z*SD) * sqrt(BSA) model, so growth comes from the
+            # child's own body growth rather than a hand-written growth law.
+            from .cdc_who import height_weight_from_zscores, sample_zscores
+            z_h, z_w = sample_zscores(rng)
+            z_valve = float(np.clip(rng.normal(), -3, 3))
+            height, weight = height_weight_from_zscores(age_months, sex, z_h, z_w)
+            h12, w12 = height_weight_from_zscores(age_months + 12.0, sex, z_h, z_w)
+            bsa = float(np.sqrt((height * weight) / 3600))
+            bsa12 = float(np.sqrt((h12 * w12) / 3600))
+            annulus_t0 = phn_annulus_diameter_mm(bsa, z_valve) + rng.normal(0, 0.3)
+            annulus_t12 = phn_annulus_diameter_mm(bsa12, z_valve) + rng.normal(0, 0.3)
+            bmi = float(weight / (height / 100) ** 2)
+        else:
+            height, weight = _height_weight_for_age(rng, age_yrs, sex=sex, source=anthropometrics)
+            bmi = float(weight / (height / 100) ** 2)
+            bsa = float(np.sqrt((height * weight) / 3600))
+            annulus_t0 = _baseline_annulus_diameter_mm(bsa) + rng.normal(0, 0.8)
+            growth_per_month = float(_valve_growth_mm_per_month(age_yrs, sex, bsa))
+            annulus_t12 = annulus_t0 + growth_per_month * 12 + rng.normal(0, 0.3)
 
         patients.append([
             i,
@@ -256,11 +303,11 @@ def generate_synthetic(N=100, seed=42, age_ranges=None):
     return merged_df
 
 
-def generate_synthetic_dataset(n_samples: int = 100, seed: int = 42, age_ranges=None):
-    return generate_synthetic(N=n_samples, seed=seed, age_ranges=age_ranges)
+def generate_synthetic_dataset(n_samples: int = 100, seed: int = 42, age_ranges=None, anthropometrics="linear", annulus_source="legacy"):
+    return generate_synthetic(N=n_samples, seed=seed, age_ranges=age_ranges, anthropometrics=anthropometrics, annulus_source=annulus_source)
 
 
-def generate_synthetic_id_ood_split(n_train: int = 200, n_ood: int = 80, seed: int = 42):
+def generate_synthetic_id_ood_split(n_train: int = 200, n_ood: int = 80, seed: int = 42, anthropometrics="linear", annulus_source="legacy"):
     """The patient-growth task's age-extrapolation OOD split: in-distribution
     data drawn only from INTERIOR_AGE_RANGE_YRS, and an OOD set drawn only
     from the excluded complement of FULL_AGE_RANGE_YRS (infants younger
@@ -283,8 +330,8 @@ def generate_synthetic_id_ood_split(n_train: int = 200, n_ood: int = 80, seed: i
     if not excluded_ranges:
         raise ValueError("INTERIOR_AGE_RANGE_YRS covers all of FULL_AGE_RANGE_YRS; nothing left for an OOD set")
 
-    id_df = generate_synthetic(N=n_train, seed=seed, age_ranges=[INTERIOR_AGE_RANGE_YRS])
-    ood_df = generate_synthetic(N=n_ood, seed=seed + 1, age_ranges=excluded_ranges)
+    id_df = generate_synthetic(N=n_train, seed=seed, age_ranges=[INTERIOR_AGE_RANGE_YRS], anthropometrics=anthropometrics, annulus_source=annulus_source)
+    ood_df = generate_synthetic(N=n_ood, seed=seed + 1, age_ranges=excluded_ranges, anthropometrics=anthropometrics, annulus_source=annulus_source)
     return id_df, ood_df
 
 

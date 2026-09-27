@@ -139,6 +139,7 @@ def run_task_with_ood(
     n_ood: int = 80,
     seed: int = 42,
     split_params: Optional[dict] = None,
+    generator_kwargs: Optional[dict] = None,
 ) -> TaskResult:
     """Like `run_task`, but the training/held-out-ID-test pool is drawn only
     from `valvebench.datasets.synthetic.INTERIOR_AGE_RANGE_YRS`, and a
@@ -147,7 +148,7 @@ def run_task_with_ood(
     the patient-growth task's counterpart to PINNVALVE's scaffold-design
     OOD corner test -- extrapolation, not interpolation.
     """
-    id_df, ood_df = generate_synthetic_id_ood_split(n_train=n_train, n_ood=n_ood, seed=seed)
+    id_df, ood_df = generate_synthetic_id_ood_split(n_train=n_train, n_ood=n_ood, seed=seed, **(generator_kwargs or {}))
     params = dict(DEFAULT_SPLIT_PARAMS if split_params is None else split_params)
     params.setdefault("age_col", "Age_yrs")
     train_df, test_df = create_group_splits(id_df, **params)
