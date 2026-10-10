@@ -288,11 +288,12 @@ and it disappeared once both were corrected.
 - **Scarcity:** it was +24.1% with 6 training designs and within ±5% from 12 designs upward.
 - **Sparse labels:** with diameter labelled only at months 0 and 12, held-out RMSE fell from 1.31 to
   0.82 mm.
-- **Far extrapolation:** with each design range widened by 25%, ξ error was 44% lower with physics
-  (against the untrained ξ head; not re-scored with the post-hoc baseline).
+- **Far extrapolation:** with each design range widened by 25%, PINNVALVE's ξ error was 43% higher than
+  the post-hoc baseline (0.289 vs 0.202; 0 of 5 seeds better). Against the untrained ξ output it had
+  appeared 44% lower.
 
-**Material constants:** with the literature nitinol preset, the diameter conclusion was unchanged (OOD
-diameter MAE change −1.4% ± 7.3%).
+**Material constants:** with the literature nitinol preset, both conclusions were unchanged: no reliable
+diameter gain (OOD MAE change −1.4% ± 7.3%) and no ξ gain over the post-hoc baseline (0.235 vs 0.206).
 
 ### 3.3 Finite-element results: can sutures hold the scaffold?
 

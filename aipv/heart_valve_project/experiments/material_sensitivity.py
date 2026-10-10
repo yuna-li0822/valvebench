@@ -37,7 +37,8 @@ _PROJECT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_PROJECT_DIR))
 
 from valvebench.datasets.synthetic import interior_train_val_test_split_sma, ood_corner_dataset_sma  # noqa: E402
-from valvebench.models.pinn_scaffold import TrainConfig, predict, predict_latent, train_scaffold_pinn  # noqa: E402
+from valvebench.models.pinn_scaffold import (  # noqa: E402
+    TrainConfig, predict, predict_latent, train_scaffold_pinn, xi_from_diameter)
 from valvebench.physics import sma_constitutive as smac  # noqa: E402
 
 SEEDS = (0, 1, 2, 3, 4)
@@ -47,7 +48,7 @@ def run_ablation(preset):
     with smac.material_constants(preset):
         train_df, _val_df, id_df = interior_train_val_test_split_sma(n_samples=120, seed=1)
         ood_df = ood_corner_dataset_sma(seed=123)
-        out = {k: {m: [] for m in ("id_rmse", "id_mae", "ood_rmse", "ood_mae", "ood_xi_rmse")} for k in ("mlp_only", "pinn")}
+        out = {k: {m: [] for m in ("id_rmse", "id_mae", "ood_rmse", "ood_mae", "ood_xi_rmse", "ood_xi_post")} for k in ("mlp_only", "pinn")}
         for seed in SEEDS:
             for key, weight in (("mlp_only", 0.0), ("pinn", TrainConfig().physics_weight)):
                 model = train_scaffold_pinn(train_df, TrainConfig(physics_weight=weight, seed=seed)).model
@@ -55,8 +56,12 @@ def run_ablation(preset):
                     err = predict(model, df) - df["Diameter_mm"].values
                     out[key][f"{split}_rmse"].append(float(np.sqrt(np.mean(err ** 2))))
                     out[key][f"{split}_mae"].append(float(np.mean(np.abs(err))))
-                _, _, xi = predict_latent(model, ood_df)
+                d, _, xi = predict_latent(model, ood_df)
                 out[key]["ood_xi_rmse"].append(float(np.sqrt(np.mean((xi - ood_df["Xi"].values) ** 2))))
+                # fair baseline: xi from the predicted diameter via the physics loss's own equations,
+                # evaluated under the same constants (inside this `with` block)
+                post = xi_from_diameter(d, ood_df)
+                out[key]["ood_xi_post"].append(float(np.sqrt(np.mean((post - ood_df["Xi"].values) ** 2))))
         spread = {
             "diameter_range_mm": [float(ood_df.Diameter_mm.min()), float(ood_df.Diameter_mm.max())],
             "xi_ood_std": float(ood_df.Xi.std()),
@@ -83,20 +88,28 @@ def main():
         "under two constant sets (see that script's docstring). Hyperparameters were tuned under the default "
         "constants and not re-tuned for the literature set. All data synthetic.",
         "",
-        "| constants | model | ID RMSE (mm) | OOD RMSE (mm) | OOD MAE (mm) | OOD ξ RMSE |",
-        "| --- | --- | ---: | ---: | ---: | ---: |",
+        "OOD ξ RMSE = the network's own ξ output. (D + closure) = ξ computed after training from the predicted "
+        "diameter with the physics loss's equations; for physics_weight=0 this is the fair baseline, because its "
+        "own ξ output is never trained.",
+        "",
+        "| constants | model | ID RMSE (mm) | OOD RMSE (mm) | OOD MAE (mm) | OOD ξ RMSE | OOD ξ RMSE (D + closure) |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     summary_lines = []
     for name, (res, spread) in results.items():
         for key, label in (("mlp_only", "physics_weight=0"), ("pinn", "PINNVALVE")):
             r = res[key]
-            lines.append(f"| {name} | {label} | {ms(r['id_rmse'])} | {ms(r['ood_rmse'])} | {ms(r['ood_mae'])} | {ms(r['ood_xi_rmse'])} |")
+            lines.append(f"| {name} | {label} | {ms(r['id_rmse'])} | {ms(r['ood_rmse'])} | {ms(r['ood_mae'])} | {ms(r['ood_xi_rmse'])} | {ms(r['ood_xi_post'])} |")
         base, pinn = np.array(res["mlp_only"]["ood_mae"]), np.array(res["pinn"]["ood_mae"])
         imp = 100.0 * (base - pinn) / base
         xi_imp = 100.0 * (1 - np.mean(res["pinn"]["ood_xi_rmse"]) / np.mean(res["mlp_only"]["ood_xi_rmse"]))
+        xi_fair = 100.0 * (1 - np.mean(res["pinn"]["ood_xi_rmse"]) / np.mean(res["mlp_only"]["ood_xi_post"]))
+        xi_wins = int((np.array(res["pinn"]["ood_xi_rmse"]) < np.array(res["mlp_only"]["ood_xi_post"])).sum())
         summary_lines.append(
             f"- **{name}**: OOD diameter MAE change {imp.mean():+.1f}% ± {imp.std():.1f}% "
-            f"({int((imp > 0).sum())}/{len(imp)} seeds positive); ξ OOD RMSE {xi_imp:.0f}% lower with physics. "
+            f"({int((imp > 0).sum())}/{len(imp)} seeds positive); ξ OOD RMSE {xi_imp:.0f}% lower than the untrained "
+            f"ξ output, {abs(xi_fair):.0f}% {'lower' if xi_fair > 0 else 'higher'} than the fair baseline "
+            f"(data-only D + closure; {xi_wins}/{len(imp)} seeds lower). "
             f"OOD diameter range {spread['diameter_range_mm'][0]:.1f}–{spread['diameter_range_mm'][1]:.1f} mm."
         )
     lines += ["", *summary_lines]

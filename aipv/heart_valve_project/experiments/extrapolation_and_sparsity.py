@@ -44,7 +44,8 @@ from valvebench.datasets.synthetic import (  # noqa: E402
     ood_corner_dataset_sma,
     scaffold_state_at_sma,
 )
-from valvebench.models.pinn_scaffold import TrainConfig, predict, predict_latent, train_scaffold_pinn  # noqa: E402
+from valvebench.models.pinn_scaffold import (  # noqa: E402
+    TrainConfig, predict, predict_latent, train_scaffold_pinn, xi_from_diameter)
 
 SEEDS = (0, 1, 2, 3, 4)
 MARGIN = 0.25
@@ -83,13 +84,17 @@ def far_extrapolation_dataset(seed=321, n_random=40):
 
 
 def _metrics(model, df, mask=None):
+    """xi_rmse scores the network's own xi output; xi_post scores xi computed after training from
+    the predicted diameter with the physics loss's equations (the fair baseline for a data-only
+    network, whose xi head is never trained)."""
     d, _, xi = predict_latent(model, df)
     err = d - df["Diameter_mm"].values
     xerr = xi - df["Xi"].values
+    perr = xi_from_diameter(d, df) - df["Xi"].values
     if mask is not None:
-        err, xerr = err[mask], xerr[mask]
+        err, xerr, perr = err[mask], xerr[mask], perr[mask]
     return {"rmse": float(np.sqrt(np.mean(err ** 2))), "mae": float(np.mean(np.abs(err))),
-            "xi_rmse": float(np.sqrt(np.mean(xerr ** 2)))}
+            "xi_rmse": float(np.sqrt(np.mean(xerr ** 2))), "xi_post": float(np.sqrt(np.mean(perr ** 2)))}
 
 
 def ms(vals, d=3):
@@ -98,13 +103,15 @@ def ms(vals, d=3):
 
 
 def run_extrapolation(train_df, far_df, std_ood_df):
-    res = {k: {m: [] for m in ("far_rmse", "far_mae", "far_xi", "std_rmse", "std_mae", "std_xi")} for k in ("mlp_only", "pinn")}
+    res = {k: {m: [] for m in ("far_rmse", "far_mae", "far_xi", "far_xi_post", "std_rmse", "std_mae", "std_xi", "std_xi_post")}
+           for k in ("mlp_only", "pinn")}
     for seed in SEEDS:
         for key, w in (("mlp_only", 0.0), ("pinn", TrainConfig().physics_weight)):
             model = train_scaffold_pinn(train_df, TrainConfig(physics_weight=w, seed=seed)).model
             f, s = _metrics(model, far_df), _metrics(model, std_ood_df)
             for tag, m in (("far", f), ("std", s)):
                 res[key][f"{tag}_rmse"].append(m["rmse"]); res[key][f"{tag}_mae"].append(m["mae"]); res[key][f"{tag}_xi"].append(m["xi_rmse"])
+                res[key][f"{tag}_xi_post"].append(m["xi_post"])
         print(f"  far-extrapolation seed {seed} done")
     return res
 
@@ -117,7 +124,7 @@ def run_sparsity(train_df, id_df, ood_df):
         sup = train_df if keep is None else train_df[train_df.t_months.isin(keep)]
         held = np.ones(len(id_df), bool) if keep is None else ~id_df.t_months.isin(keep).values
         held_ood = np.ones(len(ood_df), bool) if keep is None else ~ood_df.t_months.isin(keep).values
-        cell = {a: {m: [] for m in ("id_rmse", "id_held_rmse", "ood_rmse", "ood_held_rmse", "ood_xi")} for a in arms}
+        cell = {a: {m: [] for m in ("id_rmse", "id_held_rmse", "ood_rmse", "ood_held_rmse", "ood_xi", "ood_xi_post")} for a in arms}
         for seed in SEEDS:
             for arm in arms:
                 if arm == "pinn_colloc" and keep is None:
@@ -128,6 +135,7 @@ def run_sparsity(train_df, id_df, ood_df):
                 i, io, o, oo = _metrics(model, id_df), _metrics(model, id_df, held), _metrics(model, ood_df), _metrics(model, ood_df, held_ood)
                 cell[arm]["id_rmse"].append(i["rmse"]); cell[arm]["id_held_rmse"].append(io["rmse"])
                 cell[arm]["ood_rmse"].append(o["rmse"]); cell[arm]["ood_held_rmse"].append(oo["rmse"]); cell[arm]["ood_xi"].append(o["xi_rmse"])
+                cell[arm]["ood_xi_post"].append(o["xi_post"])
         out[name] = cell
         print(f"  sparsity setting '{name}' done")
     return out
@@ -151,19 +159,29 @@ def main():
          "Far box (each parameter widened by 25% of its range per side, clipped to valid values): "
          + ", ".join(f"{k} {v[0]:.2f}–{v[1]:.2f}" for k, v in box.items())
          + f". Test set: {far_df.sample_id.nunique()} designs (16 far corners + 40 random points outside the full box).", "",
-         "| test set | model | diameter RMSE (mm) | diameter MAE (mm) | ξ RMSE |", "| --- | --- | ---: | ---: | ---: |"]
+         "ξ RMSE = the network's own ξ output. ξ RMSE (D + closure) = ξ computed after training from the predicted "
+         "diameter with the physics loss's equations; for physics_weight=0 this is the fair baseline, because its own "
+         "ξ output is never trained.", "",
+         "| test set | model | diameter RMSE (mm) | diameter MAE (mm) | ξ RMSE | ξ RMSE (D + closure) |",
+         "| --- | --- | ---: | ---: | ---: | ---: |"]
     for tag, label in (("std", "standard OOD (16 corners of full box)"), ("far", "far extrapolation")):
         for key, name in (("mlp_only", "physics_weight=0"), ("pinn", "PINNVALVE")):
             r = ex[key]
-            L.append(f"| {label} | {name} | {ms(r[tag + '_rmse'])} | {ms(r[tag + '_mae'])} | {ms(r[tag + '_xi'])} |")
+            L.append(f"| {label} | {name} | {ms(r[tag + '_rmse'])} | {ms(r[tag + '_mae'])} | {ms(r[tag + '_xi'])} | "
+                     f"{ms(r[tag + '_xi_post'])} |")
     base, pin = np.array(ex["mlp_only"]["far_mae"]), np.array(ex["pinn"]["far_mae"])
     imp = 100 * (base - pin) / base
     xi_imp = 100 * (1 - np.mean(ex["pinn"]["far_xi"]) / np.mean(ex["mlp_only"]["far_xi"]))
-    L += ["", f"Far-extrapolation diameter MAE change with physics: {imp.mean():+.1f}% ± {imp.std():.1f}% ({int((imp > 0).sum())}/5 seeds positive); ξ RMSE {xi_imp:.0f}% lower.", "",
+    xi_fair = 100 * (1 - np.mean(ex["pinn"]["far_xi"]) / np.mean(ex["mlp_only"]["far_xi_post"]))
+    xi_wins = int((np.array(ex["pinn"]["far_xi"]) < np.array(ex["mlp_only"]["far_xi_post"])).sum())
+    L += ["", f"Far-extrapolation diameter MAE change with physics: {imp.mean():+.1f}% ± {imp.std():.1f}% ({int((imp > 0).sum())}/5 seeds positive). "
+          f"PINNVALVE ξ RMSE vs the data-only network's own (untrained) ξ output: {xi_imp:.0f}% lower; "
+          f"vs the fair baseline (data-only D + closure): {abs(xi_fair):.0f}% {'lower' if xi_fair > 0 else 'higher'} "
+          f"({xi_wins}/5 seeds lower).", "",
           "## 2. Temporal sparsity", "",
           "Scored on held-out (ID) and OOD designs at all 5 timepoints; 'unsupervised times' = timepoints not used for diameter labels in training.", "",
-          "| supervised timepoints | arm | ID RMSE, all t | ID RMSE, unsupervised t | OOD RMSE, all t | OOD RMSE, unsupervised t | OOD ξ RMSE |",
-          "| --- | --- | ---: | ---: | ---: | ---: | ---: |"]
+          "| supervised timepoints | arm | ID RMSE, all t | ID RMSE, unsupervised t | OOD RMSE, all t | OOD RMSE, unsupervised t | OOD ξ RMSE | OOD ξ RMSE (D + closure) |",
+          "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for name, cell in sp.items():
         for arm, label in (("mlp_only", "mlp_only"), ("pinn", "pinn (physics at labeled rows)"), ("pinn_colloc", "pinn_colloc (physics at all 5 t)")):
             r = cell[arm]
@@ -171,7 +189,7 @@ def main():
                 continue
             held = "n/a" if name.startswith("all") else ms(r["id_held_rmse"])
             held_o = "n/a" if name.startswith("all") else ms(r["ood_held_rmse"])
-            L.append(f"| {name} | {label} | {ms(r['id_rmse'])} | {held} | {ms(r['ood_rmse'])} | {held_o} | {ms(r['ood_xi'])} |")
+            L.append(f"| {name} | {label} | {ms(r['id_rmse'])} | {held} | {ms(r['ood_rmse'])} | {held_o} | {ms(r['ood_xi'])} | {ms(r['ood_xi_post'])} |")
     report = _PROJECT_DIR / "experiments" / "extrapolation_and_sparsity_report.md"
     report.write_text("\n".join(L) + "\n", encoding="utf-8")
     (_PROJECT_DIR / "experiments" / "extrapolation_and_sparsity_results.json").write_text(json.dumps({"extrapolation": ex, "sparsity": sp}, indent=2), encoding="utf-8")

@@ -42,7 +42,7 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 - **Patient side:** children are simulated but sampled from real references: CDC growth charts for height and weight, and the Pediatric Heart Network model for annulus size (D = (1.91 + z·0.24) cm × √BSA). Assumptions I added: height–weight correlation 0.6, percentiles held for 12 months.
 - **Limit to volunteer:** that annulus model is for **healthy** children; my target patients have heart disease.
 - **Why R² is only about 0.42 on the patient task:** kids of the same size differ by about ±2.4 mm in annulus size and that can't be predicted from height and weight. The best models are within about 0.2 mm of the irreducible floor.
-- **Scaffold side:** the equations are from Brinson and Auricchio-Sacco. Constants are round values inside published ranges; I also ran a literature set (Bernini 2023) and the conclusions held (ξ error 53% lower; diameter still no reliable effect).
+- **Scaffold side:** the equations are from Brinson and Auricchio-Sacco. Constants are round values inside published ranges; I also ran a literature set (Bernini 2023) and the conclusions held (no reliable diameter effect; no ξ gain over the fair baseline).
 - **I caught my own earlier generator overstating annular growth by about 7×** (5.5 vs 0.75 mm/yr) when I moved to literature-based data.
 
 ## COMSOL: what it is and isn't

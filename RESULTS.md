@@ -93,7 +93,10 @@ Once the generator fix gave the benchmark real signal, `mlp` scored **R² ≈ �
 | labels at t = 0, 6, 12 | 0.553 | **0.138 ± 0.028** | 0.189 ± 0.010 | 1.62 | 1.75 |
 | labels at t = 0, 12 | 0.521 | 0.215 ± 0.019 | 0.298 ± 0.028 (0.195 through the closure) | 2.00 | 1.80 |
 
-(3 seeds per condition except clean.) **The synthetic "60% better ξ" result does not survive a fair baseline.** PINNVALVE's ξ is better only under heavy noise (3/3 seeds), the same condition where its diameter is better, so the gain comes from a better diameter, not from separate access to the hidden state. The far-extrapolation (44%) and literature-constants (53%) ξ figures in this file and the paper use the same untrained-head baseline and have not been re-scored; treat them as superseded.
+(3 seeds per condition except clean.) **The synthetic "60% better ξ" result does not survive a fair baseline.** PINNVALVE's ξ is better only under heavy noise (3/3 seeds), the same condition where its diameter is better, so the gain comes from a better diameter, not from separate access to the hidden state. The two other synthetic ξ claims fail the same check (`experiments/extrapolation_and_sparsity_report.md`, `experiments/material_sensitivity_report.md`, 5 seeds each):
+
+- **Far extrapolation** (design ranges widened 25%): "44% lower" against the untrained head; against the fair baseline PINNVALVE is 43% *worse* (0.289 vs 0.202, 0/5 seeds better).
+- **Literature nitinol constants:** "53% lower" against the untrained head; against the fair baseline 14% worse (0.235 vs 0.206, 2/5 seeds better).
 
 ## 5. What changed between the first and second audit passes on PINNVALVE (read this before citing the 13% number anywhere — it's wrong)
 
