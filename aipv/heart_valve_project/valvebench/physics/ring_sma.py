@@ -5,7 +5,11 @@ physics prior when PINNVALVE is trained on COMSOL finite-element data
 The COMSOL model (experiments/comsol/ValveRing.java.template) is a 2D-axisymmetric
 Lagoudas shape-memory ring, R 11-13 mm, height 5 mm, held by a radial suture spring whose
 stiffness decays as exp(-k t). This module replaces that full model with three
-textbook approximations, so the network is never given the simulator's own equations:
+textbook approximations, so the network is never given the simulator's own equations.
+It does use the simulator's exact parameters: ring geometry, suture stiffness scale
+(K_SCALE, E_SUT, A_SUT, L_SUT) and material constants (E_A, E_M, H_MAX, C_A, A_S_C) are
+copied from the COMSOL model, not fitted or independently chosen. Given a diameter, the
+closure alone therefore reproduces COMSOL's martensite closely (xi_from_diameter):
 
 1. Hoop equilibrium. The suture pressure p on the outer surface is balanced by the
    mean compressive hoop stress, sigma = p * R_out / t_wall. This is exact for the
@@ -105,3 +109,26 @@ def _exp(x):
         pass
     import numpy as np
     return np.exp(x)
+
+
+def xi_from_diameter(d, t, suture_count, dissolution_rate, crimp_mm, af_c, iters=60):
+    """Martensite implied by a diameter alone, with no network: sigma from the suture law,
+    then the constitutive closure solved for xi in [0, 1]. Applied to a data-only network's
+    diameter, this is the post-hoc baseline for PINNVALVE's latent xi. The one-sided kinetics
+    bound is deliberately not applied: on the data-only network's diameters, clipping to it
+    raises OOD xi RMSE (0.085 -> 0.114, seed 0), and on COMSOL's true diameters too
+    (0.005 -> 0.016), so leaving it out gives the stronger baseline. af_c is unused and kept
+    for a uniform signature. numpy only."""
+    import numpy as np
+    d, t, n, k, u0 = (np.asarray(a, dtype=float) for a in (d, t, suture_count, dissolution_rate, crimp_mm))
+    sigma = np.maximum(suture_hoop_stress(d, t, n, k, u0), 0.0)
+    eps = hoop_strain(d)
+    # sigma(xi) = E(xi) (eps - H xi) decreases in xi on [0, eps/H]; bisect for the root.
+    lo = np.zeros_like(eps)
+    hi = np.clip(eps / H_MAX, 0.0, 1.0)
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        resid = smac.constitutive_stress(eps, mid, e_a=E_A, e_m=E_M, epsilon_l=H_MAX) - sigma
+        lo = np.where(resid > 0, mid, lo)
+        hi = np.where(resid > 0, hi, mid)
+    return (lo + hi) / 2

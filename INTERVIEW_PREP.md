@@ -4,7 +4,7 @@ Read this out loud, in your own words. If you can't explain a line without looki
 
 ## The 30-second version
 
-Children with congenital heart disease often need a new pulmonary valve, and today's valves don't grow, so they outgrow them. I built a physics-informed neural network (PINNVALVE) that predicts how a growth-adaptive nitinol scaffold expands over 12 months from four design choices, and a benchmark (ValveBench) to test it fairly. My question was whether putting the real nitinol physics into the network's training makes it better than the same network trained on data alone. The honest answer: it does **not** improve the diameter prediction on new designs, but it does recover an internal variable, the martensite fraction, that the network never sees in training, with about 60% less error.
+Children with congenital heart disease often need a new pulmonary valve, and today's valves don't grow, so they outgrow them. I built a physics-informed neural network (PINNVALVE) that predicts how a growth-adaptive nitinol scaffold expands over 12 months from four design choices, and a benchmark (ValveBench) to test it fairly. My question was whether putting the real nitinol physics into the network's training makes it better than the same network trained on data alone. The honest answer: it does **not** improve the diameter prediction on new designs. On finite-element data it recovers an internal variable, the martensite fraction, on unseen designs with 38% less error than a fair data-only baseline. On synthetic data that advantage disappeared once I made the baseline fair.
 
 ## Explain the Brinson equation
 
@@ -26,13 +26,14 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 
 - **What I found:** on designs outside the training range, diameter error is about the same with and without the physics term (OOD MAE 1.32 vs 1.32 mm; −0.5% ± 4.2%; better in only 1 of 5 seeds).
 - **Why that's believable:** diameter is directly supervised and, with enough clean data, a flexible network already learns it. Physics has little to add there. It helps where the data can't: the variable you never observe, and when data is scarce or noisy.
-- **Where physics did help:** ξ error is about 60% lower; up to about 24% better OOD diameter error with only 6 training designs; about 45% better at high measurement noise.
+- **Where physics did help:** up to about 24% better OOD diameter error with only 6 training designs; about 45% better at high measurement noise; on COMSOL data, OOD ξ 38% lower than a fair baseline (0.047 vs 0.076; no gain in-distribution).
+- **Where I thought it helped and it didn't:** on synthetic data ξ looked 60% better, but the data-only network's ξ output was never trained. Given the same equations after training, its diameter gives ξ at 0.171 vs PINNVALVE's 0.206. I caught this myself; it is the same kind of check as the 13% bug.
 - **How to frame it:** "I tested a popular claim, that physics always helps, and found where it does and doesn't in this system." Don't call the diameter result a failure, and don't hide it.
 
 ## Explain the leakage bug (this is your best story)
 
 - An early version reported about 13% better OOD error with physics. I audited it and found two mistakes: I had **chosen the physics weight by looking at the same OOD data I then reported**, and I had reported "in-distribution error" measured **on the training set**.
-- I fixed both: a separate validation set for tuning, and a truly held-out test set. The 13% disappeared (it became −1.1% ± 4.2%), and the ξ result survived at every weight I tried.
+- I fixed both: a separate validation set for tuning, and a truly held-out test set. The 13% disappeared (it became −1.1% ± 4.2%). The ξ result survived that fix, but a later check showed it was measured against an untrained output (see above).
 - Lesson: an improvement that only appears when the test set influences your choices isn't an improvement.
 
 ## Data provenance: say exactly this
@@ -55,7 +56,8 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 - **PINNVALVE on COMSOL data (the non-circular test).** The data come from COMSOL; the physics loss is my
   reduced-order ring model (hoop equilibrium, suture law, 1D constitutive law), not COMSOL's equations.
   - Diameter on unseen designs: no reliable gain (+7.9% ± 16%), the same as on synthetic data.
-  - Hidden martensite fraction: recovered to 0.047 RMSE vs 0.32 for the data-only network, every seed.
+  - Hidden martensite fraction: 0.047 RMSE vs 0.076 for the data-only network's diameter passed through the same physics equations (fair baseline; 0.32 against its untrained ξ output). Every seed with ≥ 8 training designs, OOD only.
+  - Disclosure: the physics loss uses COMSOL's exact geometry, suture and material parameters.
   - With noisy measurements: 20% lower diameter error, all seeds.
 - **Device findings.**
   - Realistic sutures can't hold a solid ring crimped.
@@ -85,9 +87,10 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 
 | | |
 |---|---|
-| ξ (never supervised) OOD error, physics vs none | 0.206 vs 0.519 (60% lower) |
+| ξ OOD error, synthetic: PINNVALVE vs fair baseline | 0.206 vs 0.171 (no gain; 0.519 for the untrained head) |
+| ξ OOD error, COMSOL: PINNVALVE vs fair baseline | 0.047 vs 0.076 (38% lower, every seed); ID 0.008 vs 0.006 |
 | OOD diameter MAE, physics vs none | 1.321 vs 1.315 mm (−0.5% ± 4.2%, 1/5 seeds positive) |
-| Same, literature nitinol constants | −1.4% ± 7.3% diameter; ξ 53% lower |
+| Same, literature nitinol constants | −1.4% ± 7.3% diameter |
 | Patient task best models | ID RMSE ≈ 2.65 mm, floor ≈ 2.4–2.5 mm |
 | Annular growth | 0.75 mm/yr (literature) vs 5.5 mm/yr (old generator) |
 

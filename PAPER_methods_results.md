@@ -193,8 +193,10 @@ Lengths are in mm, stresses in MPa, and σ is the compressive mean hoop stress:
    - ξ is at most the Brinson reverse-kinetics bound at σ, with σ_Af = C_A(37 − Af)
    - D does not exceed its free value
 
-The suture law is shared with the simulator. The geometry, material response and finite-element solution
-are not.
+The suture law is shared with the simulator. **The parameters are also the simulator's:** ring geometry,
+suture stiffness scale (K₀) and material constants (E_A, E_M, H, C_A, A_s) are copied from the COMSOL model,
+not fitted or chosen independently. The finite-element solution and the full axisymmetric Lagoudas response
+are not shared; the physics loss replaces them with the 1D closure above.
 
 **Network and training.** Same architecture as Section 2.4, with 32 hidden units. Inputs are N, k, U₀, Af
 and t; only D is supervised. Training ran for 2000 epochs at a learning rate of 5×10⁻³, with physics
@@ -209,6 +211,12 @@ weight 1.0 ramped over the first 400 epochs. All of these were fixed before any 
 - **Benchmark baselines:** the generic VALVEBENCH models were also fit on the same inputs.
 
 ξ is scored against COMSOL's volume-averaged martensite fraction, which no model is trained on.
+
+**Post-hoc ξ baseline.** The data-only network's ξ output receives no gradient, so it is not a fair
+comparison for PINNVALVE's ξ. The baseline we report instead takes the data-only network's predicted D and
+computes ξ from it after training, with the same equations as the physics loss (suture law and closure
+solved for ξ; the one-sided kinetics bound is not applied, since clipping to it made the baseline worse). The same baseline is reported on synthetic data, where ξ is
+solved from the D → ε mapping, the closure and the Brinson kinetics together.
 
 ### 2.7 Evaluation
 
@@ -257,12 +265,18 @@ wider age range. OOD RMSE is worse than ID RMSE for every model.
 |---|---|---|---|
 | Data-only network | 0.212 ± 0.035 | 1.944 ± 0.098 | 0.519 ± 0.053 |
 | PINNVALVE | 0.223 ± 0.021 | 1.962 ± 0.067 | 0.206 ± 0.011 |
+| Data-only D + closure ξ (post hoc) | — | — | 0.171 ± 0.038 |
 
 **Diameter: no reliable gain.** Adding physics did not reliably improve OOD diameter error
 (−1.1% ± 4.2%, 1 of 5 seeds positive).
 
-**Hidden state: a large, robust gain.** Physics reduced the error of the never-supervised martensite
-fraction by 60%. This held at every physics weight tested (0.1–20) and in every seed.
+**Hidden state: no gain over a fair baseline.** Against the data-only network's own ξ output, physics
+looked 60% better. That output is never trained, however. Passing the data-only network's diameter through
+the physics equations after training gave 0.171 ± 0.038, slightly better than PINNVALVE (0.206). Across
+conditions, PINNVALVE's ξ was better only with heavy training noise (1.0 mm: 0.200 vs 0.285, 3 of 3 seeds),
+where its diameter was also better (1.94 vs 2.78 mm); with sparse labels the post-hoc baseline was better
+(`experiments/xi_posthoc_synthetic_report.md`). On synthetic data the physics equations invert the
+generator exactly, so ξ follows from diameter and carries no independent information.
 
 **An earlier result was a methodology error.** An earlier analysis reported a 13% diameter improvement.
 It came from tuning the physics weight on the test set and from reporting training error as test error,
@@ -274,10 +288,11 @@ and it disappeared once both were corrected.
 - **Scarcity:** it was +24.1% with 6 training designs and within ±5% from 12 designs upward.
 - **Sparse labels:** with diameter labelled only at months 0 and 12, held-out RMSE fell from 1.31 to
   0.82 mm.
-- **Far extrapolation:** with each design range widened by 25%, ξ error was 44% lower with physics.
+- **Far extrapolation:** with each design range widened by 25%, ξ error was 44% lower with physics
+  (against the untrained ξ head; not re-scored with the post-hoc baseline).
 
-**Material constants:** with the literature nitinol preset, conclusions were unchanged (ξ error 53%
-lower, OOD diameter MAE change −1.4% ± 7.3%).
+**Material constants:** with the literature nitinol preset, the diameter conclusion was unchanged (OOD
+diameter MAE change −1.4% ± 7.3%).
 
 ### 3.3 Finite-element results: can sutures hold the scaffold?
 
@@ -395,13 +410,18 @@ two quantities it is never fitted to:
 | MLP (scikit-learn) | 0.050 ± 0.002 | 0.156 ± 0.004 | — | — |
 | Data-only network | 0.0088 ± 0.0023 | 0.095 ± 0.016 | 0.256 ± 0.025 | 0.322 ± 0.027 |
 | PINNVALVE | 0.0090 ± 0.0011 | 0.086 ± 0.011 | 0.008 ± 0.001 | 0.047 ± 0.004 |
+| Data-only D + closure ξ (post hoc) | — | — | 0.006 ± 0.002 | 0.076 ± 0.009 |
 
 The pattern from synthetic data replicates on independent finite-element data:
 
 - **Diameter: no reliable gain.** The OOD change was +7.9% ± 16.0% (3 of 5 seeds positive).
-- **Hidden state: large and consistent gain.** PINNVALVE recovered COMSOL's martensite fraction to
-  0.047 RMSE on unseen designs, compared with 0.32 for the data-only network (Figure 3). It did so in
-  every seed and in every condition with at least 8 training designs.
+- **Hidden state: a consistent gain over a fair baseline.** PINNVALVE recovered COMSOL's martensite
+  fraction to 0.047 RMSE on unseen designs (Figure 3). The fair comparison is the data-only network's
+  diameter passed through the same closure after training (0.076), not its untrained ξ output (0.32), so
+  the gain is 38%, not 85%. PINNVALVE was better in every seed of every condition with at least 8 training
+  designs, but not with 4 (1 of 3 seeds). On held-out interior designs the baseline was as good (0.006 vs
+  0.008), so the gain is in extrapolation. It is not explained by diameter accuracy, which differed by
+  under 10%. Unlike the synthetic result, this one survives the fair baseline.
 - **Noise: the clearest diameter benefit.** With 0.03 mm noise on training diameters, OOD diameter error
   fell 19.9% (0.119 → 0.093 mm; 3 of 3 seeds).
 - **Sparse labels: a moderate benefit.** With diameter labelled only at months 0, 6 and 12, held-out
@@ -415,6 +435,9 @@ The pattern from synthetic data replicates on independent finite-element data:
   crimp (82% at implant). Realistic sutures do reach that regime on the proposed lattice designs: the
   10 mm design is held at 13.3 mm and the taper at 14.0–15.5 mm (Section 4.2).
 - **The suture-decay law is assumed,** and is shared by the simulator and the physics loss.
+- **The physics loss uses the simulator's exact parameters** (geometry, suture stiffness, material
+  constants). Given COMSOL's true diameter, the closure alone gives ξ to 0.005 RMSE on OOD designs, so
+  ξ recovery tests the reduced-order form and the training method, not independently chosen constants.
 - **Not modelled:** fatigue under cardiac cycling, plasticity, and the frame-end crowns.
 - **The lattice is idealised:** flat, plane-stress, and its strut dimensions were estimated from a render.
 - **Seeds:** secondary conditions use 3 seeds, so individual percentages are suggestive.
@@ -425,8 +448,9 @@ The pattern from synthetic data replicates on independent finite-element data:
   (`experiments/figures/comsol_ring_stiffness_sweep.png`).
 - **Figure 2.** Peak strut strain vs crimp diameter for strut widths 0.2–0.4 mm, with the 6–8%
   recoverable band (`experiments/figures/comsol_cell_peak_strain.png`).
-- **Figure 3.** Martensite fraction inferred on unseen COMSOL designs vs COMSOL's value, physics off and
-  on (`experiments/figures/pinn_comsol_xi_recovery.png`).
+- **Figure 3.** Martensite fraction inferred on unseen COMSOL designs vs COMSOL's value: the data-only
+  network's own ξ output (never trained), the data-only network's diameter passed through the closure
+  (fair baseline), and PINNVALVE (`experiments/figures/pinn_comsol_xi_recovery.png`).
 - **Supplementary.** Recovery fraction, COMSOL vs synthetic generator
   (`experiments/figures/comsol_ring_vs_synthetic.png`); physics-weight sweep and data efficiency on
   synthetic data (`experiments/figures/physics_weight_sweep.png`, `data_efficiency.png`).

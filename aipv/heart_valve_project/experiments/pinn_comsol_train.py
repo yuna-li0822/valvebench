@@ -38,6 +38,7 @@ sys.path.insert(0, str(PROJECT))
 
 from valvebench.datasets.comsol import comsol_splits, load_comsol_dataset  # noqa: E402
 from valvebench.models.pinn_comsol import TrainConfig, predict_latent, train_ring_pinn  # noqa: E402
+from valvebench.physics.ring_sma import xi_from_diameter  # noqa: E402
 
 DATASET = PROJECT / "data" / "comsol" / "comsol_dataset.csv"
 OUT_JSON = PROJECT / "experiments" / "pinn_comsol_results.json"
@@ -47,10 +48,14 @@ NOISE_SD = 0.03
 
 
 def evaluate(model, df):
+    """xi_rmse scores the network's own xi output. xi_posthoc_rmse scores the closure applied to
+    the network's predicted diameter (ring_sma.xi_from_diameter), which needs no physics in training."""
     d, _, xi = predict_latent(model, df)
     err = d - df.Diameter_mm.values
+    xi_post = xi_from_diameter(d, df.t_months, df.Suture_Count, df.Dissolution_Rate, df.Crimp_mm, df.Af_C)
     return {"d_rmse": float(np.sqrt(np.mean(err ** 2))), "d_mae": float(np.mean(np.abs(err))),
-            "xi_rmse": float(np.sqrt(np.mean((xi - df.Xi_avg.values) ** 2)))}
+            "xi_rmse": float(np.sqrt(np.mean((xi - df.Xi_avg.values) ** 2))),
+            "xi_posthoc_rmse": float(np.sqrt(np.mean((xi_post - df.Xi_avg.values) ** 2)))}
 
 
 def run_pair(train_df, parts, seed, epochs, collocation_df=None):
@@ -70,7 +75,7 @@ def summarize(runs):
         out[key] = {}
         for sp in ("val", "test", "ood"):
             out[key][sp] = {}
-            for m in ("d_rmse", "d_mae", "xi_rmse"):
+            for m in ("d_rmse", "d_mae", "xi_rmse", "xi_posthoc_rmse"):
                 v = np.array([r[key][sp][m] for r in runs])
                 out[key][sp][m] = {"mean": float(v.mean()), "sd": float(v.std(ddof=1)) if len(v) > 1 else 0.0}
     gains = np.array([1 - r["pinn"]["ood"]["d_rmse"] / r["mlp"]["ood"]["d_rmse"] for r in runs])
@@ -138,6 +143,9 @@ def render(r):
              "Physics prior: `valvebench/physics/ring_sma.py` (reduced-order; not the simulator's equations). "
              "Only diameter is supervised; martensite (ξ) is scored against COMSOL's volume-averaged value, "
              "which the network never sees.", "",
+             "Fair ξ baseline: the row \"MLP + closure ξ\" takes the data-only network's predicted diameter and "
+             "computes ξ after training with the same reduced-order closure (`ring_sma.xi_from_diameter`). "
+             "The data-only network's own ξ output receives no gradient, so its ξ RMSE is that of an untrained head.", "",
              f"Designs: {r['splits']}. Epochs: {r.get('epochs')}. physics_weight 1.0 (PINNVALVE) vs 0.0 (MLP), "
              "chosen in advance, not tuned on any test set.", ""]
     sections = [("main", "All training designs (5 seeds)")]
@@ -157,6 +165,8 @@ def render(r):
             lines.append(f"| {label} | {_ms(s[m]['test']['d_rmse'])} | {_ms(s[m]['ood']['d_rmse'])} | "
                          f"{_ms(s[m]['ood']['d_mae'])} | {_ms(s[m]['test']['xi_rmse'], fmt='{:.3f}')} | "
                          f"{_ms(s[m]['ood']['xi_rmse'], fmt='{:.3f}')} |")
+        lines.append(f"| MLP + closure ξ (post hoc) | — | — | — | {_ms(s['mlp']['test']['xi_posthoc_rmse'], fmt='{:.3f}')} | "
+                     f"{_ms(s['mlp']['ood']['xi_posthoc_rmse'], fmt='{:.3f}')} |")
         lines += ["", f"OOD diameter RMSE improvement from physics: {g['mean']:+.1f}% ± {g['sd']:.1f}% "
                   f"({g['seeds_positive']}/{g['n']} seeds positive).", ""]
     return "\n".join(lines) + "\n"

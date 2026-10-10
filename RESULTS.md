@@ -76,9 +76,24 @@ Once the generator fix gave the benchmark real signal, `mlp` scored **R² ≈ �
 | --- | ---: | ---: | ---: |
 | mlp_only (physics_weight=0) | 0.212 ± 0.035 | 1.944 ± 0.098 | 0.519 ± 0.053 |
 | PINNVALVE | 0.223 ± 0.021 | 1.962 ± 0.067 | 0.206 ± 0.011 |
+| mlp_only diameter + closure ξ (post hoc) | — | — | **0.171 ± 0.038** |
 
 - **OOD diameter RMSE improvement: −1.1% ± 4.2%** (1/5 seeds positive). Not a reliable effect.
-- **OOD martensite-fraction (ξ) RMSE improvement: 60.3%**, and this held at *every* `physics_weight` from 0.1 to 20 tested during development, and at every seed. ξ is never directly supervised — the network only ever sees diameter as a training target.
+- **OOD martensite-fraction (ξ): no gain over a fair baseline.** Against the data-only network's own ξ output, physics looks 60% better (0.519 → 0.206). But that output never receives a gradient, so 0.519 is an untrained head. The fair baseline passes the data-only network's predicted diameter through the physics loss's own equations after training (`pinn_scaffold.xi_from_diameter`), and it scores 0.171 ± 0.038, slightly *better* than PINNVALVE. See §5b.
+
+## 5b. Post-hoc ξ baseline: what the ξ result actually measures
+
+`experiments/xi_posthoc_synthetic_report.md` (`experiments/xi_posthoc_synthetic.py`). On synthetic data the physics loss's equations invert the generator exactly: applied to the true diameters, they give ξ to 0.012 RMSE. So once a network predicts diameter, ξ follows by algebra, and the right comparison is PINNVALVE's ξ against the data-only network's diameter put through the same equations. OOD ξ RMSE:
+
+| condition | data-only head (untrained) | data-only + closure | PINNVALVE | data-only OOD D (mm) | PINNVALVE OOD D (mm) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| clean (main ablation, 5 seeds) | 0.519 | **0.171 ± 0.038** | 0.206 ± 0.012 | 1.94 | 1.96 |
+| training noise 0.3 | 0.556 | 0.194 ± 0.042 | 0.202 ± 0.014 | 2.01 | 1.99 |
+| training noise 1.0 | 0.527 | 0.285 ± 0.007 | **0.200 ± 0.006** | 2.78 | 1.94 |
+| labels at t = 0, 6, 12 | 0.553 | **0.138 ± 0.028** | 0.189 ± 0.010 | 1.62 | 1.75 |
+| labels at t = 0, 12 | 0.521 | 0.215 ± 0.019 | 0.298 ± 0.028 (0.195 through the closure) | 2.00 | 1.80 |
+
+(3 seeds per condition except clean.) **The synthetic "60% better ξ" result does not survive a fair baseline.** PINNVALVE's ξ is better only under heavy noise (3/3 seeds), the same condition where its diameter is better, so the gain comes from a better diameter, not from separate access to the hidden state. The far-extrapolation (44%) and literature-constants (53%) ξ figures in this file and the paper use the same untrained-head baseline and have not been re-scored; treat them as superseded.
 
 ## 5. What changed between the first and second audit passes on PINNVALVE (read this before citing the 13% number anywhere — it's wrong)
 
@@ -97,9 +112,9 @@ An earlier version of this project reported "~13% OOD RMSE improvement, robust a
 | 3.0 | mean +0.9% ± 7.5% (1 run) |
 | 10.0 (previous default) | mean −17.2% ± 11.1% — actively harmful once evaluated honestly |
 
-The diameter effect **did not survive** at any weight tested. The ξ-recovery effect (mlp_only ξ RMSE ≈ 0.55 vs. physics-on ≈ 0.11–0.19) **did survive**, unchanged, at every weight. `TrainConfig`'s default was changed from `physics_weight=10.0` to `physics_weight=1.0` as a result — see that dataclass's docstring in `valvebench/models/pinn_scaffold.py` for the full sweep.
+The diameter effect **did not survive** at any weight tested. The ξ-recovery effect (mlp_only ξ RMSE ≈ 0.55 vs. physics-on ≈ 0.11–0.19) appeared at every weight, but it is measured against an untrained ξ head; against a fair post-hoc baseline it does not hold (§5b). `TrainConfig`'s default was changed from `physics_weight=10.0` to `physics_weight=1.0` as a result — see that dataclass's docstring in `valvebench/models/pinn_scaffold.py` for the full sweep.
 
-**The honest conclusion**: this project's original PINN-beats-MLP-on-OOD-diameter headline does not hold up. What does hold up, robustly, is that physics residuals let a network recover latent physical state it was never shown — a real, defensible, if less flashy, PINN result. See `experiments/figures/physics_weight_sweep.png`.
+**The honest conclusion**: this project's original PINN-beats-MLP-on-OOD-diameter headline does not hold up. On synthetic data, neither does the latent-state result once the baseline is fair (§5b): physics helps only where it also improves diameter (heavy noise, scarcity). See `experiments/figures/physics_weight_sweep.png`.
 
 ## 6. Where the physics prior *does* reliably help: data scarcity and noise
 
@@ -159,7 +174,8 @@ shape-memory ring held by dissolving sutures (`data/comsol/comsol_dataset.csv`, 
 - **Splits:** 72 train / 24 val / 24 held-out interior designs, plus the 16 design-box corners as OOD.
 - **Physics loss:** a reduced-order approximation, not COMSOL's equations (`valvebench/physics/ring_sma.py`).
   It combines thin-ring hoop equilibrium, the suture law, a 1D constitutive closure and one-sided kinetics
-  bounds.
+  bounds. **It uses COMSOL's exact parameters:** ring geometry, suture stiffness scale and material
+  constants (E_A, E_M, H_max, C_A, A_s) are copied from the COMSOL model, not fitted or chosen independently.
 - **Supervision:** only diameter. Martensite (ξ) is scored against COMSOL's volume-averaged value.
 
 Full tables: `experiments/pinn_comsol_report.md`. VALVEBENCH leaderboard: `comsol_leaderboard.md`.
@@ -170,6 +186,12 @@ Full tables: `experiments/pinn_comsol_report.md`. VALVEBENCH leaderboard: `comso
 | --- | ---: | ---: | ---: | ---: |
 | data-only network | 0.0088 ± 0.0023 | 0.0951 ± 0.0155 | 0.256 ± 0.025 | 0.322 ± 0.027 |
 | PINNVALVE | 0.0090 ± 0.0011 | 0.0860 ± 0.0107 | 0.008 ± 0.001 | 0.047 ± 0.004 |
+| data-only diameter + closure ξ (post hoc) | — | — | 0.006 ± 0.002 | 0.076 ± 0.009 |
+
+The data-only network's ξ output is never trained, so its 0.32 is an untrained head. The fair baseline is the
+last row: the data-only network's predicted diameter put through PINNVALVE's own closure after training
+(`ring_sma.xi_from_diameter`; the one-sided kinetics bound is not applied, because clipping to it made the
+baseline worse). Applied to COMSOL's true diameters, that closure gives ξ to 0.003 (ID) and 0.005 (OOD).
 
 **Other regimes** (3 seeds each; OOD diameter RMSE change from adding physics):
 
@@ -186,9 +208,15 @@ Full tables: `experiments/pinn_comsol_report.md`. VALVEBENCH leaderboard: `comso
 
 1. **Diameter on unseen designs: no reliable gain.** The full-data change is +7.9% ± 16.0% (3/5 seeds positive),
    the same picture as §5.
-2. **Hidden-state recovery: robust and large.** PINNVALVE recovers COMSOL's martensite fraction to
-   0.047 RMSE on unseen designs, against 0.32 for the data-only network. It does so in every seed and in every
-   condition with at least 8 training designs (`experiments/figures/pinn_comsol_xi_recovery.png`).
+2. **Hidden-state recovery: survives a fair baseline, at a smaller margin.** PINNVALVE recovers COMSOL's
+   martensite fraction to 0.047 RMSE on unseen designs. Against the untrained ξ head (0.32) that looks 7×
+   better; against the fair post-hoc baseline (0.076) it is 38% lower. It wins in every seed of every
+   condition with at least 8 training designs (5/5 main, 3/3 at 8, 16 and 32 designs, sparse and noise), and
+   not with 4 designs (1/3). On held-out *interior* designs the baseline is as good or slightly better
+   (0.006 vs 0.008), so the gain is specific to extrapolation (`experiments/figures/pinn_comsol_xi_recovery.png`). Unlike on
+   synthetic data (§5b), the gain is not explained by diameter: OOD diameter error differs by under 10%
+   (0.086 vs 0.095 mm) while ξ error differs by 38%. Training with the closure makes the predicted trajectory
+   consistent with it, which a network fitted only to diameter does not achieve.
 3. **The physics prior helps most under noise, and somewhat under sparse measurements.** With 0.03 mm noise it
    lowers OOD diameter error by 19.9% in all three seeds; with sparse labels it also lowers held-out error by
    34% (0.0156 vs 0.0235 mm).
@@ -200,7 +228,9 @@ Full tables: `experiments/pinn_comsol_report.md`. VALVEBENCH leaderboard: `comso
   hold that ring (§7d), so the dataset is a stand-in. It represents the regime where sutures hold most of the
   crimp (82% at implant), which realistic sutures do reach on the proposed lattice designs (98% and 81%, §7d).
 - The suture law (exponential stiffness decay) appears in both the simulator and the physics loss, so it is not
-  independently tested. The material response, geometry and finite-element solution are.
+  independently tested. The physics loss also uses COMSOL's exact geometry, suture and material parameters,
+  which is why the closure alone reproduces COMSOL's ξ from the true diameter. What is independently tested is
+  the reduced-order *form* (1D closure vs. the full axisymmetric Lagoudas solution), not the parameter values.
 - Three seeds per secondary condition: read individual percentages as suggestive.
 
 ## 7d. COMSOL device findings
@@ -226,10 +256,10 @@ All in `experiments/figures/`, generated by `experiments/generate_figures.py` fr
 
 - `patient_growth_pred_vs_actual.png`, `patient_growth_residuals.png` — linear model fit quality on the held-out ID test set.
 - `leaderboard_id_vs_ood.png` — RMSE comparison, all 6 models, ID vs OOD, mean ± SD bars.
-- `physics_weight_sweep.png` — the key honesty figure: diameter improvement crossing zero and going negative at high weight (left), ξ-recovery robust at every weight (right).
+- `physics_weight_sweep.png` — the key honesty figure: diameter improvement crossing zero and going negative at high weight (left), ξ-recovery at every weight (right), measured against the untrained ξ head; see §5b for the fair baseline.
 - `training_curves.png` — data loss / physics loss vs. epoch, physics-off vs. physics-on.
 - `data_efficiency.png` — OOD RMSE vs. training-set size, both models.
-- `pinn_comsol_xi_recovery.png` — martensite inferred on unseen COMSOL designs vs. COMSOL's value, physics off vs. on (§7c).
+- `pinn_comsol_xi_recovery.png` — martensite inferred on unseen COMSOL designs vs. COMSOL's value: data-only ξ output (untrained), data-only diameter + closure (fair baseline), PINNVALVE (§7c).
 - `comsol_cell_peak_strain.png`, `comsol_ring_stiffness_sweep.png`, `comsol_ring_vs_synthetic.png` — COMSOL device results (§7d).
 
 ## 9. Reproduce

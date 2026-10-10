@@ -178,6 +178,30 @@ def _epsilon_from_diameter(d_pred, theta_raw):
     return epsilon_0 * (1.0 - recovery)
 
 
+
+def xi_from_diameter(d, df: pd.DataFrame, iters: int = 60) -> np.ndarray:
+    """Martensite implied by a diameter alone, using only the equations in the physics
+    loss: the D -> epsilon mapping above, then the constitutive closure and Brinson kinetics
+    solved together for (sigma, xi). epsilon(sigma) = sigma / E(xi(sigma)) + xi(sigma) * eps_L
+    increases with sigma, so the root is found by bisection. Applied to a data-only network's
+    diameter, this is the post-hoc baseline for PINNVALVE's latent xi. numpy only."""
+    theta_raw = df[THETA_COLUMNS].values.astype(float)
+    eps = _epsilon_from_diameter(np.asarray(d, dtype=float).reshape(-1, 1), theta_raw).ravel()
+
+    def strain(sigma):
+        return smac.constitutive_strain(sigma, smac.reverse_phase_fraction(sigma))
+
+    lo = np.zeros_like(eps)
+    hi = np.full_like(eps, 10.0 * smac.SIGMA_AS)
+    while np.any(strain(hi) < eps):
+        hi = np.where(strain(hi) < eps, hi * 2, hi)
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        below = strain(mid) < eps
+        lo = np.where(below, mid, lo)
+        hi = np.where(below, hi, mid)
+    return np.asarray(smac.reverse_phase_fraction((lo + hi) / 2), dtype=float)
+
 @dataclass
 class TrainConfig:
     # Re-tuned after fixing the tuning methodology (see this module's

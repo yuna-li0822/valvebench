@@ -63,3 +63,23 @@ def test_ring_pinn_trains_and_physics_changes_latent_output():
     xa = predict_latent(a, train)[2]
     xb = predict_latent(b, train)[2]
     assert np.all(np.isfinite(xb)) and not np.allclose(xa, xb)
+
+
+def test_xi_from_diameter_inverts_the_closure():
+    d, t, n, k, u0, af = 25.3, 2.0, 7, 0.15, 0.5, 20.0
+    xi = float(ring.xi_from_diameter(d, t, n, k, u0, af))
+    sigma = ring.suture_hoop_stress(d, t, n, k, u0)
+    assert 0.0 < xi < 1.0
+    assert ring.constitutive_residual(sigma, d, xi) == pytest.approx(0.0, abs=1e-6)
+    assert 0.0 <= xi <= 1.0
+    assert float(ring.xi_from_diameter(ring.D_FREE, t, n, k, u0, af)) == 0.0
+
+
+@needs_data
+def test_closure_on_true_diameters_tracks_comsol_martensite():
+    # Ceiling for any closure-based xi: given COMSOL's own diameters, the reduced-order
+    # closure alone recovers COMSOL's volume-averaged martensite.
+    df = comsol_splits(load_comsol_dataset())["test"]
+    xi = ring.xi_from_diameter(df.Diameter_mm, df.t_months, df.Suture_Count, df.Dissolution_Rate,
+                               df.Crimp_mm, df.Af_C)
+    assert np.sqrt(np.mean((xi - df.Xi_avg.values) ** 2)) < 0.01

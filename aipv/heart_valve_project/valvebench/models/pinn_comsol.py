@@ -4,8 +4,11 @@ Same idea as valvebench.models.pinn_scaffold: a small network maps a design vect
 time to diameter D, mean hoop stress sigma and martensite fraction xi; only D is
 supervised. The physics prior is valvebench.physics.ring_sma, a reduced-order model of
 the COMSOL ring (hoop equilibrium, suture law, 1D constitutive closure, one-sided
-kinetics bounds). It is not the simulator's own equations, so agreement with COMSOL is
-a test, not a tautology.
+kinetics bounds). It is not the simulator's own equations, but it uses the simulator's
+exact geometry, suture and material parameters, so once D is fitted, xi follows almost by
+algebra. The fair baseline for PINNVALVE's xi is therefore not the data-only network's
+untrained xi head but its predicted D passed through the same closure
+(ring_sma.xi_from_diameter); experiments/pinn_comsol_train.py reports both.
 
 Design vector (data/comsol/comsol_dataset_designs.csv):
     Suture_Count, Dissolution_Rate, Crimp_mm, Af_C

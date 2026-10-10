@@ -121,7 +121,7 @@ The patient-growth numbers are dominated by real biological variation: children 
 | PINNVALVE | 0.223 ± 0.021 | 0.147 ± 0.007 | 1.962 ± 0.067 | 1.321 ± 0.069 | 0.206 ± 0.011 |
 
 - Diameter OOD RMSE: **−1.1% ± 4.2%** (MAE: **−0.5% ± 4.2%**) — not a reliable effect (1/5 seeds positive).
-- Martensite-fraction (never-supervised) OOD RMSE: **60% better**, robust across every `physics_weight` tested (0.1–20) and every seed.
+- Martensite-fraction (never-supervised) OOD RMSE: 60% better than the data-only network's own ξ output, but that output is never trained. Against a fair baseline (the data-only network's diameter passed through the same physics equations after training) there is **no gain**: 0.171 vs 0.206. PINNVALVE is better only under heavy noise (RESULTS.md §5b, `experiments/xi_posthoc_synthetic_report.md`).
 - The physics prior's benefit **is** real and substantial in two specific regimes: when training data is scarce (up to +24% OOD RMSE improvement at 6 training designs, fading to noise by ~24 designs) and when observations are noisy (5% improvement at low noise, **45% at high noise**, scaling monotonically) — see `experiments/figures/data_efficiency.png` and RESULTS.md.
 
 **PINNVALVE on COMSOL finite-element data** (RESULTS.md §7c, `comsol_leaderboard.md`). 136 COMSOL designs of a suture-held superelastic nitinol ring; the physics loss is a reduced-order model of the ring, not the simulator's equations; 5 seeds:
@@ -130,8 +130,10 @@ The patient-growth numbers are dominated by real biological variation: children 
 | --- | ---: | ---: | ---: |
 | data-only network | 0.0088 ± 0.0023 | 0.0951 ± 0.0155 | 0.322 ± 0.027 |
 | PINNVALVE | 0.0090 ± 0.0011 | 0.0860 ± 0.0107 | 0.047 ± 0.004 |
+| data-only diameter + closure ξ (post hoc) | — | — | 0.076 ± 0.009 |
 
-- **The synthetic-data conclusions replicate on independent data.** There is no reliable OOD diameter gain (+7.9% ± 16.0%, 3/5 seeds positive). Recovery of the never-supervised martensite fraction is large and consistent: 0.047 vs 0.32 RMSE.
+- **No reliable OOD diameter gain**, as on synthetic data (+7.9% ± 16.0%, 3/5 seeds positive).
+- **Martensite recovery beats a fair baseline here, unlike on synthetic data:** 0.047 vs 0.076 OOD RMSE (38% lower, every seed with ≥ 8 training designs); no gain on interior designs (0.008 vs 0.006). Against the data-only network's untrained ξ output it would look like 0.047 vs 0.32. The physics loss uses COMSOL's exact geometry, suture and material parameters.
 - **Physics helps under measurement noise.** With 0.03 mm noise, OOD diameter error falls 19.9% (3/3 seeds).
 - **Physics helps somewhat with sparse labels and 8–32 training designs.** The gain is 5–18%, with 2/3 seeds positive in each case.
 - **Generic baselines are far less accurate.** OOD RMSE is 0.16–0.22 mm for linear, ridge, gradient boosting and the MLP.
@@ -192,7 +194,7 @@ An earlier version of this project reported a "~13% OOD RMSE improvement from th
 1. **`physics_weight` was selected by observing performance on the exact same OOD test set later used to report results** — hyperparameter tuning that leaks into the test set.
 2. **"In-distribution RMSE" was computed by predicting on the training set itself**, not a held-out split — training error reported as generalization error.
 
-Both were fixed: a genuinely held-out ID test split was added (`interior_train_val_test_split_sma`), and a separate validation OOD set disjoint from the final test set was added (`ood_shell_dataset`) for hyperparameter selection. Under the corrected methodology, the diameter-RMSE improvement **did not survive** — it's noise-level at every `physics_weight` tried. The martensite-fraction recovery improvement **did survive**, fully intact, at every weight tested. The corrected, final numbers are what's reported in §10 and RESULTS.md.
+Both were fixed: a genuinely held-out ID test split was added (`interior_train_val_test_split_sma`), and a separate validation OOD set disjoint from the final test set was added (`ood_shell_dataset`) for hyperparameter selection. Under the corrected methodology, the diameter-RMSE improvement **did not survive** — it's noise-level at every `physics_weight` tried. The martensite-fraction recovery improvement survived that fix at every weight tested, but a later check found it was measured against an untrained ξ output; against a fair post-hoc baseline it does not hold on synthetic data (RESULTS.md §5b). The corrected, final numbers are what's reported in §10 and RESULTS.md.
 
 Separately, the same audit found the patient-growth generator's `Valve_t0` was drawn independently of every feature (correlation ≈ 0.02–0.07, noise-level), making roughly half the benchmark's two-column target unlearnable regardless of model capacity, and that `Height_cm`/`Weight_kg` were independent of `Age_yrs` (a synthetic "1-year-old" could be assigned a height of 180cm). Both were fixed (§4); the leaderboard's R² went from ≈0.01 (barely above predicting the mean) to ≈0.70 as a direct result. The same pass found `MLPRegressor` was being fed unscaled features and produced R² ≈ −7 (worse than predicting the mean) — a missing-preprocessing bug, not evidence MLPs are unsuited to this task; fixed by standardizing inputs and outputs, after which `mlp` performs on par with `linear`/`ridge`.
 

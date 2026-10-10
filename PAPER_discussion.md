@@ -92,8 +92,10 @@ clean.** This held on synthetic data and on finite-element data.
 **It did help in three ways:**
 - **Noisy data:** diameter error fell by up to 45% on synthetic data and 20% on finite-element data.
 - **Sparse data:** error also fell when diameter was measured at only a few times.
-- **Hidden state:** the network recovered the scaffold's internal martensite fraction, which a data-only
-  network of identical design could not.
+- **Hidden state (finite-element data only):** the network recovered the scaffold's internal martensite
+  fraction on unseen corner designs 38% more accurately than a data-only network whose diameter was passed
+  through the same physics equations after training (no gain on interior designs). On synthetic data this gain disappeared against that baseline,
+  except under heavy noise.
 
 These conditions match clinical follow-up, where a child's valve diameter is measured by echocardiography
 only a few times a year, with measurement error. A model that infers the scaffold's internal state from
@@ -106,8 +108,12 @@ that training converged.
 **Two caveats.**
 - The suture-decay law is shared by the simulator and the physics loss, so it is not independently
   validated.
-- The reduced physics reproduces the simulator closely (suture pressure within 0.1%, martensite within
-  about 0.01), so recovering the martensite fraction is partly expected once diameter is fitted.
+- The reduced physics uses the simulator's exact geometry, suture and material parameters, and reproduces
+  it closely (suture pressure within 0.1%, martensite within about 0.01). Recovering the martensite fraction
+  is therefore expected once diameter is fitted. For that reason the comparison we report is against a
+  data-only network given the same equations after training, not against its untrained ξ output. The
+  first comparison inflates the gain (0.32 → 0.047); the fair one shows a smaller but consistent gain
+  on out-of-distribution designs (0.076 → 0.047) and none on interior designs.
 
 ### 4.4 Limitations
 

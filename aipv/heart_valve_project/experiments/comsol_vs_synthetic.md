@@ -28,7 +28,7 @@ Synthetic numbers below come from evaluating the generator over its full design 
 data. They are:
 
 - the physics loss does not reliably improve out-of-distribution diameter error
-- it recovers the never-supervised martensite fraction 60% better
+- on synthetic data, its apparent martensite gain disappears against a fair post-hoc baseline (RESULTS.md §5b)
 - it helps when data are scarce or noisy
 
 These findings are about whether a physics prior helps a network learn a given physical law. None of the COMSOL
@@ -158,7 +158,10 @@ RESULTS.md §7c). The physics loss is a reduced-order model of the ring, not COM
 (`valvebench/physics/ring_sma.py`). The method conclusions replicate on this independent data:
 
 - **No reliable gain in diameter accuracy on unseen designs:** +7.9% ± 16.0%.
-- **Large, consistent recovery of the never-supervised martensite fraction:** 0.047 vs 0.32 RMSE.
+- **Consistent recovery of the never-supervised martensite fraction:** 0.047 OOD RMSE vs 0.076 for the
+  data-only network's diameter passed through the same closure (0.32 against its untrained ξ output).
+  The physics loss uses COMSOL's exact geometry, suture and material parameters, so this tests the
+  reduced-order form and the training method, not independently chosen constants.
 - **The clearest diameter benefit is under measurement noise:** +19.9%, 3/3 seeds.
 
 So the circularity objection to the synthetic-only results (same equations in the data and the loss)

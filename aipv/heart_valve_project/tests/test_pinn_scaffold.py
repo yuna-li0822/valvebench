@@ -103,3 +103,15 @@ def test_ablation_xi_recovery_is_robust_but_diameter_improvement_is_not_claimed(
 
     assert result["pinn"]["ood_xi_rmse"] < 0.5 * result["mlp_only"]["ood_xi_rmse"]
     assert result["pinn"]["id_rmse"] < 2.0  # physics regularization shouldn't wreck the in-distribution fit
+
+
+def test_posthoc_xi_from_noise_free_diameter_recovers_generator_xi():
+    # The physics loss's own equations invert the generator exactly, so on noise-free
+    # diameters the post-hoc xi matches the true xi. This is why a data-only network's
+    # diameter + this closure is the fair baseline for PINNVALVE's latent xi.
+    from valvebench.models.pinn_scaffold import xi_from_diameter
+
+    df = interior_train_val_test_split_sma(n_samples=20, seed=1, noise_scale=0.0)[0]
+    xi = xi_from_diameter(df["Diameter_mm"].values, df)
+    assert np.all((xi >= 0) & (xi <= 1))
+    assert np.sqrt(np.mean((xi - df["Xi"].values) ** 2)) < 1e-3
