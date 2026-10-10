@@ -189,7 +189,7 @@ def cell_summary(cell: pd.DataFrame) -> pd.DataFrame:
         end = cr.iloc[-1]
         rows.append({
             "case": case, "cells_around": int(end.cells_around), "strut_length_mm": end.strut_length_mm,
-            "strut_width_mm": end.strut_width_mm, "fillet_mm": end.fillet_mm,
+            "strut_width_mm": end.strut_width_mm, "root_width_mm": end.root_width_mm, "fillet_mm": end.fillet_mm,
             "mesh_div_per_width": end.mesh_div_per_width,
             "peak_strain_at_13mm": end.peak_strain, "D_at_6pct_mm": first[0.06], "D_at_8pct_mm": first[0.08],
             "max_xi_at_13mm": min(end.max_xi, 1.0), "max_mises_at_13mm_MPa": end.max_mises_MPa,
@@ -338,14 +338,16 @@ def main():
                   "Quarter of one diamond cell (12 cells around, 5.6 mm struts, plane stress, 0.4 mm thick), "
                   "filleted X-junctions, Lagoudas SMA at 37 C, geometric nonlinearity. Model: "
                   "`experiments/comsol/LatticeCell.java.template`; data: `data/comsol/comsol_cell_runs.csv`.", "",
-                  "| case | cells around | strut length (mm) | strut width (mm) | fillet (mm) | mesh (elements per width) | "
+                  "| case | cells around | strut length (mm) | strut width, junction -> middle (mm) | fillet (mm) | mesh (elements per width) | "
                   "peak strain at 13 mm | D where strain passes 6% (mm) | passes 8% (mm) | max martensite | "
                   "hoop force per cell row (N) |",
                   "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
         for _, r in cs.iterrows():
             d6 = "never" if np.isnan(r.D_at_6pct_mm) else f"{r.D_at_6pct_mm:.1f}"
             d8 = "never" if np.isnan(r.D_at_8pct_mm) else f"{r.D_at_8pct_mm:.1f}"
-            lines.append(f"| {r.case} | {r.cells_around} | {r.strut_length_mm:g} | {r.strut_width_mm:g} | {r.fillet_mm:g} | "
+            width = (f"{r.strut_width_mm:g}" if r.root_width_mm == r.strut_width_mm
+                     else f"{r.root_width_mm:g} -> {r.strut_width_mm:g}")
+            lines.append(f"| {r.case} | {r.cells_around} | {r.strut_length_mm:g} | {width} | {r.fillet_mm:g} | "
                          f"{int(r.mesh_div_per_width)} | {r.peak_strain_at_13mm * 100:.1f}% | {d6} | {d8} | "
                          f"{r.max_xi_at_13mm:.2f} | {r.hoop_force_per_row_at_13mm_N:.1f} |")
         lines += ["",
@@ -357,11 +359,17 @@ def main():
                   "junction centre, where the strut meets the junction; 12.3% inside the junction, 8.9% at 1-2 mm and "
                   "0.5% in the middle of the strut. Bending concentrates at the strut roots, which is why strut width "
                   "and fillet radius change the peak so little.", ""]
+        border = cs[(cs.peak_strain_at_13mm >= RECOVERABLE_LIMIT[0]) & (cs.peak_strain_at_13mm < RECOVERABLE_LIMIT[1])]
+        for _, r in border.iterrows():
+            lines += [f"Borderline: `{r.case}` reaches {r.peak_strain_at_13mm * 100:.1f}% at 13 mm, inside the 6-8% band "
+                      f"(passes 6% at {r.D_at_6pct_mm:.1f} mm). Its release is reported in the CSV but is less certain, "
+                      "because the material model caps transformation strain at 6%.", ""]
         ok = cs[cs.peak_strain_at_13mm < RECOVERABLE_LIMIT[0]]
         if len(ok):
             lines += ["Designs that stay under 6% for the full 26 -> 13 mm crimp, with release back to free size:", ""]
             for _, r in ok.iterrows():
-                lines.append(f"- `{r.case}`: {r.cells_around} cells, {r.strut_length_mm:g} mm x {r.strut_width_mm:g} mm struts, "
+                lines.append(f"- `{r.case}`: {r.cells_around} cells, {r.strut_length_mm:g} mm struts "
+                             f"({r.root_width_mm:g} mm at the junction, {r.strut_width_mm:g} mm at mid-length), "
                              f"peak strain {r.peak_strain_at_13mm * 100:.1f}%, "
                              + ("release did not converge, " if np.isnan(r.recovered_D_mm) else f"recovers to {r.recovered_D_mm:.2f} mm, ")
                              + f"hoop force per row at 13 mm {r.hoop_force_per_row_at_13mm_N:.1f} N.")

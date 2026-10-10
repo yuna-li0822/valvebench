@@ -1,7 +1,9 @@
 """Runs lattice-cell cases (LatticeCell.java.template) in COMSOL batch mode and
 writes data/comsol/comsol_cell_runs.csv.
 
-Each case is `name;fillet_mm;mesh_div_per_width;strut_width_mm;thickness_mm;cells_around;strut_length_mm`.
+Each case is `name;fillet_mm;mesh_div_per_width;strut_width_mm;thickness_mm;cells_around;strut_length_mm[;root_width_mm]`.
+`strut_width_mm` is the width at mid-length; `root_width_mm` (default: the same) is the width where the
+strut meets the junction, giving a linearly tapered strut.
 The cell is crimped from 26 to 13 mm; it is released back only if its peak
 strain stays under 8% (past that the model's recovery is not physical).
 
@@ -21,7 +23,8 @@ HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parents[1]
 CELL_CSV = PROJECT / "data" / "comsol" / "comsol_cell_runs.csv"
 COMSOL_BIN = Path(r"C:\Program Files\COMSOL\COMSOL64\Multiphysics\bin\win64")
-FIELDS = ["fillet_mm", "mesh_div_per_width", "strut_width_mm", "thickness_mm", "cells_around", "strut_length_mm"]
+FIELDS = ["fillet_mm", "mesh_div_per_width", "strut_width_mm", "thickness_mm", "cells_around", "strut_length_mm",
+          "root_width_mm"]
 
 
 def read_cases(path):
@@ -29,7 +32,9 @@ def read_cases(path):
     for line in Path(path).read_text().splitlines():
         if line.strip() and not line.startswith("#"):
             name, *vals = line.strip().split(";")
-            cases[name] = dict(zip(FIELDS, map(float, vals[:6])))
+            c = dict(zip(FIELDS, map(float, vals[:7])))
+            c.setdefault("root_width_mm", c["strut_width_mm"])
+            cases[name] = c
     return cases
 
 

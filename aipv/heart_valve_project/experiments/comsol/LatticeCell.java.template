@@ -11,10 +11,11 @@ import com.comsol.model.util.*;
 public class __CLASS__ {
   public static void main(String[] args) throws Exception { run(); }
 
-  // name ; fillet mm ; mesh divisions per strut width ; strut width mm ; thickness mm ; cells around ; strut length mm [; save path]
+  // name ; fillet mm ; mesh divisions per strut width ; mid strut width mm ; thickness mm ; cells around ; strut length mm
+  //   [; root width mm (default = mid width) [; save path]]
   static String[] CASES = CASE_LIST;
 
-  static Model build(double rf, double hdiv, double w, double t, double Ncell, double L) {
+  static Model build(double rf, double hdiv, double w, double t, double Ncell, double L, double wroot) {
     double Dfree = 26.0;
     double W = Math.PI * Dfree / Ncell;
     double alpha = Math.acos(W / (2 * L));
@@ -23,7 +24,8 @@ public class __CLASS__ {
     Model m = ModelUtil.create("cell");
     m.param().set("Dfree", Dfree + "[mm]");
     m.param().set("L", L + "[mm]");
-    m.param().set("w", w + "[mm]");
+    m.param().set("w", w + "[mm]", "strut width at mid-length");
+    m.param().set("wroot", wroot + "[mm]", "strut width at the junction");
     m.param().set("tth", t + "[mm]");
     m.param().set("rf", rf + "[mm]");
     m.param().set("adeg", String.valueOf(Math.toDegrees(alpha)));
@@ -35,12 +37,25 @@ public class __CLASS__ {
     m.component().create("comp1", true);
     var g = m.component("comp1").geom().create("geom1", 2);
     g.lengthUnit("mm");
-    String[][] rects = {{"r1", "2*L+2*w", "0", "0", "adeg"}, {"r2", "2*L", "0", "0", "-adeg"},
-                        {"r3", "2*L", "Wc/2", "Hc/2", "-adeg"}};
+    // Strut r1: tapered polygon from node to node, width wroot at both junctions and w at mid-length
+    // (wroot = w gives a straight strut). r2/r3 are the neighbouring struts' roots at each junction.
+    double ca = Math.cos(alpha), sa = Math.sin(alpha), ext = wroot;
+    double[] sPts = {-ext, 0, L / 2, L, L + ext};
+    double[] hw = {wroot / 2, wroot / 2, w / 2, wroot / 2, wroot / 2};
+    double[][] poly = new double[10][2];
+    for (int i = 0; i < 5; i++) {
+      poly[i] = new double[]{sPts[i] * ca - hw[i] * sa, sPts[i] * sa + hw[i] * ca};
+      poly[9 - i] = new double[]{sPts[i] * ca + hw[i] * sa, sPts[i] * sa - hw[i] * ca};
+    }
+    g.create("r1", "Polygon");
+    g.feature("r1").set("source", "table");
+    g.feature("r1").set("table", poly);
+    g.feature("r1").set("type", "solid");
+    String[][] rects = {{"r2", "2*L", "0", "0", "-adeg"}, {"r3", "2*L", "Wc/2", "Hc/2", "-adeg"}};
     for (String[] r : rects) {
       g.create(r[0], "Rectangle");
       g.feature(r[0]).set("base", "center");
-      g.feature(r[0]).set("size", new String[]{r[1], "w"});
+      g.feature(r[0]).set("size", new String[]{r[1], "wroot"});
       g.feature(r[0]).set("pos", new String[]{r[2], r[3]});
       g.feature(r[0]).set("rot", r[4]);
     }
@@ -53,7 +68,7 @@ public class __CLASS__ {
       g.feature("bs" + i).set("entitydim", 0);
       g.feature("bs" + i).set("posx", nodes[i][0]);
       g.feature("bs" + i).set("posy", nodes[i][1]);
-      g.feature("bs" + i).set("r", 0.6);
+      g.feature("bs" + i).set("r", Math.max(0.6, 1.3 * wroot));
       g.feature("bs" + i).set("condition", "inside");
     }
     g.create("uns", "UnionSelection");
@@ -196,7 +211,8 @@ public class __CLASS__ {
       try {
         if (m != null) ModelUtil.remove("cell");
         m = build(Double.parseDouble(f[1]), Double.parseDouble(f[2]), Double.parseDouble(f[3]), Double.parseDouble(f[4]),
-                  Double.parseDouble(f[5]), Double.parseDouble(f[6]));
+                  Double.parseDouble(f[5]), Double.parseDouble(f[6]),
+                  f.length > 7 ? Double.parseDouble(f[7]) : Double.parseDouble(f[3]));
         long t0 = System.currentTimeMillis();
         m.sol("sol1").runAll();
         double peak = report(m, f[0] + "__crimp", "sol1");
@@ -207,7 +223,7 @@ public class __CLASS__ {
           report(m, f[0] + "__unload", "sol2");
         }
         System.out.println("CASEOK," + f[0] + "," + (System.currentTimeMillis() - t0) / 1000.0);
-        if (f.length > 7) m.save(f[7]);
+        if (f.length > 8) m.save(f[8]);
       } catch (Exception e) {
         System.out.println("CASEFAIL," + f[0] + "," + String.valueOf(e.getMessage()).replace('\n', ' '));
       }

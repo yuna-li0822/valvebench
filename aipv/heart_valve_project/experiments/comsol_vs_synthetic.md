@@ -77,6 +77,23 @@ peak strain to 8.4–10.4%. That is still above 6% at 13 mm. One design stays in
 |---|---|---|---|---|
 | 12 cells, 10 mm × 0.25 mm struts | 5.0% (fine mesh), 5.2% (normal mesh), 5.05% (0.2 mm fillet) | 0.61 | returns to 26.00 mm, martensite 0 | 1.17 N |
 
+**Tapered struts on the original layout.** Five more runs kept 12 cells and 5.6 mm struts and only
+changed the strut width along its length: wide where it meets the junction, narrow in the middle.
+
+| Width, junction → middle | Peak strain at 13 mm | Passes 6% at | Passes 8% at | Hoop tension per row at 13 mm |
+|---|---|---|---|---|
+| 0.4 → 0.4 (straight, control) | 12.7% | 23.1 mm | 22.5 mm | 32.7 N |
+| 0.4 → 0.2 | 8.8% | 19.0 mm | 16.2 mm | 20.5 N |
+| 0.5 → 0.2 | 8.6% | 17.4 mm | 14.3 mm | 24.7 N |
+| 0.6 → 0.2 | 8.9% | 19.1 mm | 16.5 mm | 29.5 N |
+| 0.4 → 0.15 | 6.5% | 14.2 mm | never | 17.7 N |
+
+The 0.4 → 0.15 mm taper is **borderline**: it is inside the 6–8% band, not below 6%. It releases back to
+26.00 mm with no martensite left, but that release is less certain, because the material model caps
+transformation strain at 6%. It keeps the original layout and about 15 times the outward force of the
+10 mm design (17.7 vs 1.17 N per row at 13 mm). A slightly thinner middle would probably bring it under
+6%, but that has not been run.
+
 Where the peak sits: in the original design at 13 mm, the strain is 12.6% at 0.5–1 mm from the
 junction centre, where the strut meets the junction. It is 0.5% in the middle of the strut.
 
@@ -120,6 +137,9 @@ Forces scale with the assumed 0.4 mm strut thickness.
    - Let recovery at implant be greater than 0 when the sutures are compliant.
    - Retrain and check whether the method conclusions still hold.
 2. **Change the frame design** so that a 2× expansion stays under 6–8% strain. The redesign runs
-   found one such design (12 cells, 10 mm struts, see above). Curved junctions were not tested.
+   found two candidates:
+   - **12 cells, 10 mm struts:** under 6%, but with tall cells and low outward force.
+   - **The original layout with struts tapered from 0.4 to 0.15 mm:** 6.5%, borderline, and it keeps
+     the original layout's outward force.
 3. **Validate on COMSOL trajectories, not only synthetic ones,** once a feasible design exists.
    `experiments/comsol_validation.py` takes the template-format CSVs in `data/comsol/`.

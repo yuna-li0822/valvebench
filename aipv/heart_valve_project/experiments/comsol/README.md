@@ -113,6 +113,10 @@ Results: `data/comsol/comsol_cell_runs.csv`, and the lattice section of `experim
 the normal mesh, 5.0% on a mesh twice as fine, and 5.05% with a 0.2 mm fillet. It releases back to
 26.00 mm with no martensite left, and carries 1.17 N of hoop tension per row at 13 mm.
 
+Tapered struts (`taper_*`) keep 12 cells and 5.6 mm struts but narrow each strut towards its
+middle. The best, 0.4 → 0.15 mm, reaches 6.5% at 13 mm, borderline but under 8%. It releases back to
+26.00 mm and keeps 17.7 N of hoop tension per row at 13 mm.
+
 Cases that pass 8% peak strain are crimped but not released, because past that point the model's
 recovery is not physical.
 

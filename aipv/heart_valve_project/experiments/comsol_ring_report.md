@@ -131,7 +131,7 @@ Martensite is zero throughout the f_lat sweep (elastic recovery); in the K1000 s
 
 Quarter of one diamond cell (12 cells around, 5.6 mm struts, plane stress, 0.4 mm thick), filleted X-junctions, Lagoudas SMA at 37 C, geometric nonlinearity. Model: `experiments/comsol/LatticeCell.java.template`; data: `data/comsol/comsol_cell_runs.csv`.
 
-| case | cells around | strut length (mm) | strut width (mm) | fillet (mm) | mesh (elements per width) | peak strain at 13 mm | D where strain passes 6% (mm) | passes 8% (mm) | max martensite | hoop force per cell row (N) |
+| case | cells around | strut length (mm) | strut width, junction -> middle (mm) | fillet (mm) | mesh (elements per width) | peak strain at 13 mm | D where strain passes 6% (mm) | passes 8% (mm) | max martensite | hoop force per cell row (N) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | base | 12 | 5.6 | 0.4 | 0.2 | 8 | 12.6% | 23.1 | 22.5 | 1.00 | 32.6 |
 | mesh4 | 12 | 5.6 | 0.4 | 0.2 | 4 | 12.6% | 23.1 | 22.5 | 1.00 | 33.3 |
@@ -148,16 +148,23 @@ Quarter of one diamond cell (12 cells around, 5.6 mm struts, plane stress, 0.4 m
 | L10_w0.25 | 12 | 10 | 0.25 | 0.125 | 6 | 5.2% | never | never | 0.64 | 1.2 |
 | L10_w0.25_mesh12 | 12 | 10 | 0.25 | 0.125 | 12 | 5.0% | never | never | 0.61 | 1.2 |
 | L10_w0.25_rf0.2 | 12 | 10 | 0.25 | 0.2 | 6 | 5.1% | never | never | 0.62 | 1.1 |
+| taper_ctrl_0.4-0.4 | 12 | 5.6 | 0.4 | 0.2 | 6 | 12.7% | 23.1 | 22.5 | 1.00 | 32.7 |
+| taper_0.4-0.2 | 12 | 5.6 | 0.4 -> 0.2 | 0.2 | 6 | 8.8% | 19.0 | 16.2 | 1.00 | 20.5 |
+| taper_0.5-0.2 | 12 | 5.6 | 0.5 -> 0.2 | 0.25 | 6 | 8.6% | 17.4 | 14.3 | 1.00 | 24.7 |
+| taper_0.6-0.2 | 12 | 5.6 | 0.6 -> 0.2 | 0.3 | 6 | 8.9% | 19.1 | 16.5 | 1.00 | 29.5 |
+| taper_0.4-0.15 | 12 | 5.6 | 0.4 -> 0.15 | 0.2 | 6 | 6.5% | 14.2 | never | 0.82 | 17.7 |
 
 Cases whose peak strain passes 6% are not given a recovery result: the material model caps transformation strain at 6% and has no plasticity, so its spring-back after such a crimp is not physical (real nitinol would take a permanent set). Cases with a 0.1 mm fillet and a 0.5 mm strut on the 12-cell, 5.6 mm geometry did not converge and are excluded.
 
 Where the peak sits (original 12-cell, 5.6 mm, 0.4 mm design at 13 mm): 12.6% at 0.5-1 mm from the junction centre, where the strut meets the junction; 12.3% inside the junction, 8.9% at 1-2 mm and 0.5% in the middle of the strut. Bending concentrates at the strut roots, which is why strut width and fillet radius change the peak so little.
 
+Borderline: `taper_0.4-0.15` reaches 6.5% at 13 mm, inside the 6-8% band (passes 6% at 14.2 mm). Its release is reported in the CSV but is less certain, because the material model caps transformation strain at 6%.
+
 Designs that stay under 6% for the full 26 -> 13 mm crimp, with release back to free size:
 
-- `L10_w0.25`: 12 cells, 10 mm x 0.25 mm struts, peak strain 5.2%, recovers to 26.00 mm, hoop force per row at 13 mm 1.2 N.
-- `L10_w0.25_mesh12`: 12 cells, 10 mm x 0.25 mm struts, peak strain 5.0%, recovers to 26.00 mm, hoop force per row at 13 mm 1.2 N.
-- `L10_w0.25_rf0.2`: 12 cells, 10 mm x 0.25 mm struts, peak strain 5.1%, release did not converge, hoop force per row at 13 mm 1.1 N.
+- `L10_w0.25`: 12 cells, 10 mm struts (0.25 mm at the junction, 0.25 mm at mid-length), peak strain 5.2%, recovers to 26.00 mm, hoop force per row at 13 mm 1.2 N.
+- `L10_w0.25_mesh12`: 12 cells, 10 mm struts (0.25 mm at the junction, 0.25 mm at mid-length), peak strain 5.0%, recovers to 26.00 mm, hoop force per row at 13 mm 1.2 N.
+- `L10_w0.25_rf0.2`: 12 cells, 10 mm struts (0.25 mm at the junction, 0.25 mm at mid-length), peak strain 5.1%, release did not converge, hoop force per row at 13 mm 1.1 N.
 
 ## Figures
 
