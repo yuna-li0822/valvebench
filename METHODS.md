@@ -77,6 +77,80 @@ loss = data_MSE(D) + ramp(epoch) * physics_weight * (
 
 `run_ablation(train_df, id_test_df, ood_df, config)`: trains physics-off and physics-on, evaluates on a genuinely held-out `id_test_df` (not `train_df` — that was a real bug, see RESULTS.md §5) and `ood_df`. `run_ablation_multi_seed(...)` runs this across seeds and aggregates mean ± SD.
 
+## COMSOL simulations (`experiments/comsol/`)
+
+COMSOL Multiphysics 6.4 models are written with the COMSOL Java API, compiled with `comsolcompile`
+and solved in batch mode with `comsolbatch`. That is the same finite-element solver as the desktop
+app, and the saved `.mph` files open there.
+
+**Ring model (`ValveRing.java.template`).**
+- **Geometry and material:** 2D-axisymmetric solid nitinol ring, R 11–13 mm, H 5 mm. COMSOL's
+  Lagoudas shape-memory model at 37 °C, with E_A 47 GPa, E_M 20 GPa, Ms/Mf/As/Af −10/−25/10/25 °C,
+  C_M/C_A 6/7 MPa/K and maximum transformation strain 0.06. Quadratic elements, 8 × 20 mesh,
+  geometric nonlinearity.
+- **Study 1, crimp:** the outer radius is prescribed inward by `U0`; the transformation direction is
+  forced forward.
+- **Study 2, hand-over:** a stiff "crimper spring" anchored at the crimped radius is relaxed, so the
+  sutures take over at month 0.
+- **Study 3, release:** the suture stiffness `K0·exp(−k·t)` decays from month 0 to 12. The sutures are a
+  radial spring on the outer surface, with `K0 = K_scale · N · E_sut · A_sut / L_sut / A_out`.
+- **Checks:** mesh convergence (3 meshes), load-step size (halved), full recovery with negligible
+  sutures, a no-dissolution control, and a cross-check against a hand-built 3D model (suture force
+  49.6 vs 49.5 N).
+
+**Lattice cell (`LatticeCell.java.template`).**
+- **Geometry:** a quarter of one diamond cell, unrolled in plane stress, 0.4 mm thick. It has
+  filleted X-junctions and an optional linear strut taper. Mirror symmetry is applied on all cell
+  edges, and the top edge moves axially as a rigid line.
+- **Loading:** the hoop direction is crimped from 26 to 13 mm. The output is peak in-plane principal
+  strain, compared against nitinol's 6–8% recoverable range.
+- **Reporting rule:** recovery is reported only for designs under 6%, because the material model
+  has no plasticity.
+
+**Training dataset (`make_dataset_cases.py`, `build_dataset.py` → `data/comsol/comsol_dataset.csv`).**
+- **Design variables:**
+
+  | Variable | Range |
+  |---|---|
+  | Suture count | 4–11 |
+  | Dissolution rate | 0.05–0.3 per month |
+  | Crimp | 0.3–0.7 mm |
+  | Af | 20–30 °C |
+
+  Suture stiffness is fixed at 1000× realistic. Varying it as well would duplicate suture count,
+  since both only scale `K0`.
+- **Designs:** 120 Latin-hypercube designs from an interior sub-box, plus the 16 full-box corners as
+  out-of-distribution designs. 136 runs in total, all of which converged.
+- **Recorded:** diameter, volume-averaged and maximum martensite, suture pressure and peak von Mises
+  stress, each at 25 times (0–12 months).
+
+## PINNVALVE on COMSOL data (`valvebench/models/pinn_comsol.py`, `valvebench/physics/ring_sma.py`)
+
+`RingPINN` maps `(Suture_Count, Dissolution_Rate, Crimp_mm, Af_C, t)` to `(D, sigma, xi)`, using the
+same two-hidden-layer tanh architecture as before. Only `D` is supervised. The physics loss is a
+reduced-order model of the ring, not COMSOL's equations:
+
+- **Hoop equilibrium:** `sigma = p · R_out / t_wall`.
+- **Suture law:** `p = K0(N) · exp(−k·t) · (U0 − (R_out − D/2))`. This law is shared with the simulator.
+- **1D constitutive closure:** `sigma = E(xi) · (eps − H·xi)` with `eps = (R_out − D/2) / R_mean`.
+- **One-sided terms:**
+  - `dD/dt ≥ 0` and `dxi/dt ≤ 0`
+  - `xi` no more than the Brinson reverse-kinetics bound at `sigma`, with `sigma_Af = C_A (37 − Af)`
+  - `D ≤ D_free`
+
+Given COMSOL's own diameter, this reduced model reproduces COMSOL's suture pressure to within about 0.1%
+and its volume-averaged martensite to within about 0.01 (`tests/test_comsol_dataset_and_ring_physics.py`).
+
+**Training.** `TrainConfig`: epochs 2000, hidden_dim 32, lr 5e-3, physics_weight 1.0, ramp over
+400 epochs. These values were fixed before the test sets were evaluated. The diameter loss is scaled
+to units of 0.1 mm.
+
+**Evaluation.** `experiments/pinn_comsol_train.py` uses the same splits as
+`valvebench.datasets.comsol.comsol_splits`: 72 train, 24 val and 24 test interior designs (split by
+design) and 16 OOD corners. It runs the main ablation (5 seeds) and the data-scarcity, sparse-label and
+noise conditions (3 seeds each). `valvebench/evaluation/generate_comsol_leaderboard.py` adds the
+generic baselines and writes `comsol_leaderboard.md`.
+
 ## Evaluation
 
 - `valvebench/evaluation/metrics.py`: MAE, MSE, RMSE, R² (multi-output R² averaged per-column, NaN if a target has zero variance rather than a silently unstable division).

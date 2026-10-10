@@ -96,7 +96,7 @@ For PINNVALVE specifically, there's a **third**, separate dataset (`ood_shell_da
 - No temperature dependence — isothermal.
 - No literal claim that material-level strain equals device-level diameter change: a real strut/lattice scaffold amplifies small material strains into large device deformations, which would require the actual strut geometry (out of scope). The generator maps a physically-derived *recovery fraction* onto a separately-modeled device-level diameter range instead — see `sma_constitutive.py`'s docstring.
 - Material constants are round values inside published ranges (with a literature preset for sensitivity checks), **not calibrated against a measured nitinol sample**.
-- No coupling to a real FEM/COMSOL simulation during training. COMSOL models (an axisymmetric nitinol ring and a diamond lattice cell) were used afterwards to test the generator's assumptions; two of them are contradicted for the estimated frame geometry (see `experiments/comsol_vs_synthetic.md`).
+- The synthetic-data PINNVALVE (`pinn_scaffold.py`) is not coupled to any finite-element model. A second PINNVALVE (`pinn_comsol.py`) is trained on COMSOL finite-element data with a reduced-order physics loss (§10, RESULTS.md §7c). COMSOL also tested the generator's assumptions, and two of them are contradicted for the estimated frame geometry (`experiments/comsol_vs_synthetic.md`).
 
 ## 10. Major results (see RESULTS.md for the full accounting)
 
@@ -124,6 +124,18 @@ The patient-growth numbers are dominated by real biological variation: children 
 - Martensite-fraction (never-supervised) OOD RMSE: **60% better**, robust across every `physics_weight` tested (0.1–20) and every seed.
 - The physics prior's benefit **is** real and substantial in two specific regimes: when training data is scarce (up to +24% OOD RMSE improvement at 6 training designs, fading to noise by ~24 designs) and when observations are noisy (5% improvement at low noise, **45% at high noise**, scaling monotonically) — see `experiments/figures/data_efficiency.png` and RESULTS.md.
 
+**PINNVALVE on COMSOL finite-element data** (RESULTS.md §7c, `comsol_leaderboard.md`). 136 COMSOL designs of a suture-held superelastic nitinol ring; the physics loss is a reduced-order model of the ring, not the simulator's equations; 5 seeds:
+
+| model | ID diameter RMSE (mm) | OOD diameter RMSE (mm) | OOD ξ RMSE |
+| --- | ---: | ---: | ---: |
+| data-only network | 0.0088 ± 0.0023 | 0.0951 ± 0.0155 | 0.322 ± 0.027 |
+| PINNVALVE | 0.0090 ± 0.0011 | 0.0860 ± 0.0107 | 0.047 ± 0.004 |
+
+- **The synthetic-data conclusions replicate on independent data.** There is no reliable OOD diameter gain (+7.9% ± 16.0%, 3/5 seeds positive). Recovery of the never-supervised martensite fraction is large and consistent: 0.047 vs 0.32 RMSE.
+- **Physics helps under measurement noise.** With 0.03 mm noise, OOD diameter error falls 19.9% (3/3 seeds).
+- **Physics helps somewhat with sparse labels and 8–32 training designs.** The gain is 5–18%, with 2/3 seeds positive in each case.
+- **Generic baselines are far less accurate.** OOD RMSE is 0.16–0.22 mm for linear, ridge, gradient boosting and the MLP.
+
 ## 11. How to reproduce everything
 
 ```bash
@@ -143,6 +155,15 @@ py -3 aipv/heart_valve_project/experiments/material_sensitivity.py              
 py -3 aipv/heart_valve_project/experiments/extrapolation_and_sparsity.py                # -> experiments/extrapolation_and_sparsity_report.md
 py -3 aipv/heart_valve_project/experiments/comsol_validation.py --comsol-csv <your export>  # compare a COMSOL export to both models
 
+# COMSOL (the first two need a local COMSOL 6.4 install; see experiments/comsol/README.md)
+py -3 aipv/heart_valve_project/experiments/comsol/make_dataset_cases.py                # -> design table + cases
+py -3 aipv/heart_valve_project/experiments/comsol/run_ring_sweep.py --cases aipv/heart_valve_project/experiments/comsol/cases_dataset.txt
+py -3 aipv/heart_valve_project/experiments/comsol/build_dataset.py                     # -> data/comsol/comsol_dataset.csv
+py -3 aipv/heart_valve_project/experiments/pinn_comsol_train.py                        # -> experiments/pinn_comsol_report.md
+py -3 aipv/heart_valve_project/experiments/pinn_comsol_figure.py                       # -> experiments/figures/pinn_comsol_xi_recovery.png
+py -3 aipv/heart_valve_project/valvebench/evaluation/generate_comsol_leaderboard.py     # -> comsol_leaderboard.md
+py -3 aipv/heart_valve_project/experiments/comsol_ring_analysis.py                     # -> experiments/comsol_ring_report.md
+
 # Tests
 py -3 -m pytest aipv/heart_valve_project/tests/
 ```
@@ -151,12 +172,16 @@ Every generator, split, and model accepts an explicit `seed`; the multi-seed har
 
 ## 12. Limitations (stated explicitly, not buried)
 
-- **All data are synthetic.** The patient data are sampled from real reference distributions (CDC charts, Pediatric Heart Network annulus model) but the children are simulated, and the model describes healthy children, not congenital heart disease patients. No claim is made about real pediatric or nitinol outcomes.
+- **All data are synthetic.** The patient data are sampled from real reference distributions (CDC charts, Pediatric Heart Network annulus model) but the children are simulated, and the model describes healthy children, not congenital heart disease patients. No claim is made about real pediatric or nitinol outcomes. The COMSOL dataset is also simulated: finite-element results for an idealised device, not measurements.
 - **VALVEBENCH is the synthetic-data-only benchmark.** The larger "open public benchmark" version of the original spec — MMWHS/ImageCHD/SegTHOR/NIH-3D ingestion actually populated with data, transcribed Pettersen/Zilberman tables, a live literature-regression baseline — is **not implemented** (CDC anthropometrics and the PHN annulus model are now used in the generator, but no real patient records are). Loaders/scaffolding exist (`valvebench/datasets/imaging/`, `valvebench/datasets/literature_tables.py`) but require data this environment doesn't have verified access to.
 - **PINNVALVE's headline diameter-accuracy claim did not survive a corrected evaluation methodology** (see §13) — this is reported as a negative result, not hidden.
 - **The physics model is a documented simplification** of a full thermomechanical SMA constitutive law (§9).
 - **COMSOL contradicts two generator assumptions for the estimated device.** Realistic sutures cannot hold a solid nitinol ring crimped, and halving the diameter of the estimated lattice (12 cells, 5.6 mm struts) gives 9.7–12.9% peak strut strain, above the 6–8% recoverable range. The method comparisons are unaffected; absolute diameter predictions should not be read as device predictions (`experiments/comsol_vs_synthetic.md`). The earlier single COMSOL phase-fraction run is withdrawn as a shape check: its curve contradicted the run's own forced transformation direction.
-- **The one lattice design that survives the 26 → 13 mm crimp trades away height and radial force.** It has 12 cells and 10 mm struts. Its cells are about 19 mm tall (about one row in a 20–25 mm frame), and its outward force is about 50× lower than the rendered geometry's (about 9 kPa vs 0.48 MPa equivalent pressure at 13 mm). Anchoring and sealing were not evaluated.
+- **The lattice designs that survive the 26 → 13 mm crimp each have a cost.**
+  - **12 cells with 10 mm struts** (5.0–5.2% peak strain) has cells about 19 mm tall and about 50× less outward force than the rendered geometry (about 9 kPa vs 0.48 MPa equivalent pressure at 13 mm).
+  - **The original layout with struts tapered 0.4 → 0.15 mm** keeps its outward force (17.7 N hoop tension per row) but is borderline at 6.5% peak strain.
+  - Anchoring and sealing were not evaluated.
+- **The COMSOL training data come from an idealised device.** It is a solid ring whose sutures are 1000× stiffer than realistic, standing in for a softer lattice. The suture law (exponential stiffness decay) is shared by the simulator and PINNVALVE's physics loss, so that law is not independently tested; the material response, geometry and finite-element solution are. Secondary COMSOL conditions use 3 seeds.
 - **Fatigue under cardiac cycling is not modelled.** The COMSOL models simulate one monotonic crimp and release; an implanted frame sees tens of millions of pulsatile cycles per year, and nitinol fatigue is governed by alternating strain at the strut junctions, which is not computed here.
 - Sample sizes in the data-efficiency and noise-robustness experiments are modest (3 seeds per condition) — the trends are consistent and physically sensible, but individual percentages should be read as suggestive, not tightly bounded.
 
@@ -189,8 +214,9 @@ Full details, every number before and after, and the reasoning behind each fix a
 - `CITATIONS.md` — every source, what it is used for, its verification status, and every modeling assumption
 - `data/` — legacy v0.1 CSV exports (`data/synthetic/`); `data/cdc/` (bundled CDC growth-chart tables + SHA256s); `data/comsol/` (COMSOL runs, run log, export template; see `experiments/comsol/README.md`); `data/literature/` (placeholder templates, see §12)
 - `valvebench/` — `datasets/` (synthetic + real-data loaders), `models/` (baselines + PINN models), `physics/`, `tasks/`, `evaluation/` (metrics + plots + both leaderboard generators), `baselines/` (thin re-exports of `models/`, kept for the file paths named in the project plan), `cli.py` (`valvebench run --all`)
-- `experiments/` — `pinn_train.py` (ablation), `error_analysis.py` (per-region failure breakdown), `generate_figures.py` and `generate_extra_figures.py` (all figures), `material_sensitivity.py`, `extrapolation_and_sparsity.py`, `comsol_validation.py`, `figures/` (output PNGs)
+- `experiments/` — `pinn_train.py` (ablation), `error_analysis.py` (per-region failure breakdown), `generate_figures.py` and `generate_extra_figures.py` (all figures), `material_sensitivity.py`, `extrapolation_and_sparsity.py`, `comsol_validation.py`, `pinn_comsol_train.py` and `pinn_comsol_figure.py` (PINNVALVE on COMSOL data), `comsol_ring_analysis.py`, `comsol_vs_synthetic.md`, `comsol/` (COMSOL model templates, case lists and runners), `figures/` (output PNGs)
 - `scripts/` — `run_baseline.py`, `export_to_hf.py`
 - `tests/` — full pytest suite, including dedicated leakage-regression tests (`test_leakage.py`)
 - `leaderboard.md` — generated VALVEBENCH leaderboard (patient-growth task)
 - `scaffold_leaderboard.md` — generated PINNVALVE leaderboard (scaffold-mechanics task)
+- `comsol_leaderboard.md` — generated leaderboard for the COMSOL scaffold task (baselines, data-only network, PINNVALVE)

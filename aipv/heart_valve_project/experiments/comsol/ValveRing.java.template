@@ -238,8 +238,13 @@ public class __CLASS__ {
         m.param().set("k_diss", f[4]);
         var sma = m.component("comp1").physics("solid").feature("sma1");
         for (String[] d : SMA_DEFAULTS) sma.set(d[0], d[1]);
+        m.param().set("U0", "0.5[mm]");
         if (!f[5].isEmpty())
-          for (String kv : f[5].split("[|]")) { String[] p = kv.split("="); sma.set(p[0], p[1]); }
+          for (String kv : f[5].split("[|]")) {
+            // "P_name=value" sets a global parameter (e.g. P_U0=0.6[mm]); anything else is an SMA property
+            String[] p = kv.split("=");
+            if (p[0].startsWith("P_")) m.param().set(p[0].substring(2), p[1]); else sma.set(p[0], p[1]);
+          }
         String[] st = {"std1", "std2", "std3"};
         String[] lb = {"crimp", "unload", "release"};
         long t0 = System.currentTimeMillis();

@@ -141,5 +141,18 @@ Forces scale with the assumed 0.4 mm strut thickness.
    - **12 cells, 10 mm struts:** under 6%, but with tall cells and low outward force.
    - **The original layout with struts tapered from 0.4 to 0.15 mm:** 6.5%, borderline, and it keeps
      the original layout's outward force.
-3. **Validate on COMSOL trajectories, not only synthetic ones,** once a feasible design exists.
-   `experiments/comsol_validation.py` takes the template-format CSVs in `data/comsol/`.
+3. **Train and test on COMSOL trajectories.** Done: see the next section.
+
+## COMSOL as training data
+
+PINNVALVE was retrained on 136 COMSOL designs of the ring (`valvebench/models/pinn_comsol.py`,
+RESULTS.md §7c). The physics loss is a reduced-order model of the ring, not COMSOL's equations
+(`valvebench/physics/ring_sma.py`). The method conclusions replicate on this independent data:
+
+- **No reliable gain in diameter accuracy on unseen designs:** +7.9% ± 16.0%.
+- **Large, consistent recovery of the never-supervised martensite fraction:** 0.047 vs 0.32 RMSE.
+- **The clearest diameter benefit is under measurement noise:** +19.9%, 3/3 seeds.
+
+So the circularity objection to the synthetic-only results (same equations in the data and the loss)
+no longer applies to these three conclusions. It still applies to the absolute device predictions
+discussed above.

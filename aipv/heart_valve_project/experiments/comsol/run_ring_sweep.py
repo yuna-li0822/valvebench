@@ -7,7 +7,8 @@ Needs a local COMSOL 6.4 install (comsolcompile + comsolbatch). Each case is
   K_scale       multiplier on the realistic suture stiffness K0
   N_sut         suture count
   k_diss        suture stiffness decay rate, 1/month
-  sma_overrides "key=value|key=value" on the Shape Memory Alloy node, e.g. "TAf=303.15[K]"
+  overrides     "key=value|key=value": Shape Memory Alloy properties (e.g. "TAf=303.15[K]"), or
+                global parameters prefixed with P_ (e.g. "P_U0=0.6[mm]")
 
 Usage:
     py -3 aipv/heart_valve_project/experiments/comsol/run_ring_sweep.py --cases cases_main.txt

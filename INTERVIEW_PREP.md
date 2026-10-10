@@ -46,19 +46,37 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 
 ## COMSOL: what it is and isn't
 
-- **Two scripted COMSOL models plus a hand-built 3D one:** an axisymmetric solid nitinol ring (52 runs) and a lattice cell with the estimated strut geometry. Each was checked for mesh and step-size convergence, against a no-dissolution control, and against the other model (49.6 vs 49.5 N suture force).
-- **What it confirms:** every design trend in the training data. More sutures hold the scaffold tighter, faster dissolution opens it sooner, Af matters most, and dissolution is the only driver of expansion.
-- **What it contradicts:**
-  - Realistic sutures can't hold a solid ring crimped (0.12 MPa supplied vs about 20 MPa needed).
-  - Halving the diameter of the estimated lattice puts 9.7–12.9% strain at the strut junctions, above nitinol's 6–8% recoverable limit.
-- **So:** my ML conclusions are about how well a physics-informed network learns the modelled law. The absolute diameters describe an idealised scaffold, not this exact device.
-- **Withdrawn:** the earlier single COMSOL phase-fraction run. Its curve contradicted the run's own forced transformation direction, so I no longer use it as a shape check.
+- **Real finite-element simulations, run in batch through COMSOL's Java API.** It is the same solver as the
+  desktop app, and the `.mph` files open there.
+  - Two device models: an axisymmetric suture-held nitinol ring and a diamond lattice cell.
+  - A 136-design ring dataset used to train PINNVALVE.
+  - A hand-built 3D model that cross-checks the ring (49.6 vs 49.5 N suture force).
+  - Convergence checks on mesh and step size, plus a no-dissolution control.
+- **PINNVALVE on COMSOL data (the non-circular test).** The data come from COMSOL; the physics loss is my
+  reduced-order ring model (hoop equilibrium, suture law, 1D constitutive law), not COMSOL's equations.
+  - Diameter on unseen designs: no reliable gain (+7.9% ± 16%), the same as on synthetic data.
+  - Hidden martensite fraction: recovered to 0.047 RMSE vs 0.32 for the data-only network, every seed.
+  - With noisy measurements: 20% lower diameter error, all seeds.
+- **Device findings.**
+  - Realistic sutures can't hold a solid ring crimped.
+  - Halving the rendered lattice's diameter overstrains the junctions (12.6% vs a 6–8% limit).
+  - 10 mm struts fix it, at the cost of tall cells and low outward force. Tapered struts get the original
+    layout to a borderline 6.5%.
+- **What it doesn't show.**
+  - The COMSOL ring is an idealised stand-in for the lattice (sutures 1000× stiffer than realistic).
+  - The suture-decay law is assumed, and is shared between the simulator and my physics loss.
+  - No fatigue.
+  - The strut dimensions are estimated from a render.
+- **Withdrawn:** my first COMSOL phase-fraction run. Its curve contradicted its own forced
+  transformation direction.
+- **Disclosure:** be ready to say which parts were done with AI assistance (model scripting, batch runs,
+  analysis code), and that I checked the results myself, as the competition rules require.
 
 ## Hard questions, short answers
 
 - **Why synthetic data?** No public dataset links scaffold design to expansion, and I don't have lab access. I made the synthetic side as literature-grounded as I could and labelled everything.
 - **Is this novel?** The physics-informed method isn't new. The application (Brinson/Auricchio-Sacco physics in a network for a growth-adaptive pediatric valve scaffold) and the rigorous, honest test of when it helps appear to be, based on my literature search. I can't claim nobody has done it anywhere.
-- **What would change your conclusion?** A real-data or COMSOL test set of a feasible frame design where physics improves diameter error, or a regime (sparser or noisier data) where the gain grows.
+- **What would change your conclusion?** Real measured data (bench tests of a frame) where physics improves diameter error on unseen designs. On COMSOL data it only reliably did so under measurement noise.
 - **Did you tune hyperparameters?** Physics weight was swept (0.1–20) on a separate validation set. Architecture, learning rate and epochs were set by hand and not tuned; I say so.
 - **Is it clinically useful?** No. It's a computational design tool; benchtop, hydrodynamic and biological validation are required first.
 - **Why 5 seeds?** Single runs mislead. All results are mean ± SD across 5 seeds and I report how many seeds went each way.

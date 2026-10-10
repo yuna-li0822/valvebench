@@ -134,3 +134,17 @@ py -3 aipv/heart_valve_project/experiments/comsol/run_cell_sweep.py --cases aipv
 - **Fatigue is not modelled.** These are single crimp-and-release simulations. An implanted frame
   sees tens of millions of cardiac cycles per year, and nitinol fatigue depends on the alternating
   strain at the junctions, which these models do not compute.
+
+## Training dataset for PINNVALVE
+
+- **Design table:** `make_dataset_cases.py` writes 120 Latin-hypercube interior designs plus 16 corner
+  designs to `cases_dataset.txt`. Ranges: suture count 4–11, dissolution rate 0.05–0.3/month,
+  crimp 0.3–0.7 mm, Af 20–30 °C. Suture stiffness is fixed at 1000× realistic.
+- **Runs:** `run_ring_sweep.py --cases cases_dataset.txt` solved all 136 designs in about 55 minutes.
+- **Dataset:** `build_dataset.py` writes `data/comsol/comsol_dataset.csv`, 3,400 rows.
+
+The model accepts `P_<name>=<value>` overrides for global parameters (here `P_U0` for crimp depth),
+alongside shape-memory alloy property overrides such as `TAf`.
+
+PINNVALVE trained on this data: `valvebench/models/pinn_comsol.py`, `experiments/pinn_comsol_train.py`,
+`comsol_leaderboard.md`.
