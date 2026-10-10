@@ -358,18 +358,18 @@ than simple beam theory predicts: 9.7% at 0.2 mm width.
 | 12 cells, 10 mm × 0.25 mm | 5.0–5.2% | never | 1.17 |
 
 The sutures are tied one after another around the middle row, so each carries the row's full hoop
-tension.
+tension. For the two proposed designs, this is 1.17 N (10 mm struts) and 17.7 N (taper).
 
-**Two redesigns reach the 13 mm implant diameter:**
+**Longer struts fix the overstrain; tapering nearly does:**
 
-- **12 cells with 10 mm struts** stays under 6%:
+- **12 cells with 10 mm struts** is the only design that stays under 6%:
   - peak strain 5.2% on the standard mesh, 5.0% on a twice-finer mesh, 5.05% with a larger fillet
   - releases back to 26.00 mm with no residual martensite
   - cells about 19 mm tall, and only 1.17 N of hoop tension per row (about 9 kPa equivalent pressure,
     against 0.48 MPa for the rendered geometry)
-- **Tapering the original layout's struts (0.4 → 0.15 mm)** keeps 17.7 N of hoop tension, but at 6.5%
-  peak strain it is borderline. Wider roots (0.5 → 0.15 mm) or a thinner middle (0.4 → 0.12 mm) were
-  worse (8.4% and 7.1%).
+- **Tapering the original layout's struts** came closest at 0.4 → 0.15 mm (6.5%, inside the 6–8% band)
+  and keeps 17.7 N of hoop tension. Wider roots (0.5 → 0.15 mm) and a thinner middle (0.4 → 0.12 mm) were
+  worse (8.4% and 7.1%), so no taper got under 6%.
 
 The two designs mark the ends of a trade-off. The outward force that anchors the valve is the same force
 the sutures must resist to hold it crimped.
@@ -410,8 +410,10 @@ The pattern from synthetic data replicates on independent finite-element data:
   and 32 training designs (each 2 of 3 seeds positive). There was no gain with 4 designs (−3.2%).
 
 **Limitations.**
-- **The COMSOL device is idealised:** a solid ring with sutures 1000× stiffer than realistic, standing
-  in for a softer lattice.
+- **The COMSOL device is idealised:** a solid ring with sutures 1000× stiffer than realistic. Realistic
+  sutures cannot hold that ring (Section 3.3), so it stands in for the regime where sutures hold most of the
+  crimp (82% at implant). Realistic sutures do reach that regime on the proposed lattice designs: the
+  10 mm design is held at 13.3 mm and the taper at 14.0–15.5 mm (Section 4.2).
 - **The suture-decay law is assumed,** and is shared by the simulator and the physics loss.
 - **Not modelled:** fatigue under cardiac cycling, plasticity, and the frame-end crowns.
 - **The lattice is idealised:** flat, plane-stress, and its strut dimensions were estimated from a render.

@@ -115,6 +115,8 @@ the row:
 Compare these with the rated knot-pull strength of the chosen absorbable suture. That strength also
 drops as the suture dissolves.
 
+**Realistic sutures can hold the proposed lattice designs.** The 1000× suture stiffness in the ring model is a property of the solid-band stand-in, not of the device. With realistic sutures (0.3 mm, 1 GPa, 5 mm) tied one after another around the middle row, the frame's release force curve (lattice-cell model) and the sutures' series stiffness give these holding diameters: 10 mm design: held at 13.3 mm (98% of the crimp held, 1.1 N per suture, 12 sutures); taper: held at 15.5 mm (81% held, 9.1 N per suture), or 14.0 mm with 6 double-stranded sutures (14.3 N each). The 1000× ring holds 82% of its crimp at implant, the same regime. In series, more sutures make the hold softer, because their stretches add; doubling strands or using a thicker suture makes it stiffer. Reference strength: USP minimum knot-pull 2.68 kgf (about 26 N) for size 2-0 synthetic absorbable sutures.
+
 Forces scale with the assumed 0.4 mm strut thickness.
 
 ## Limitations of the COMSOL results
@@ -143,11 +145,10 @@ Forces scale with the assumed 0.4 mm strut thickness.
      `comsol_ring_report.md` give this per geometry.
    - Let recovery at implant be greater than 0 when the sutures are compliant.
    - Retrain and check whether the method conclusions still hold.
-2. **Change the frame design** so that a 2× expansion stays under 6–8% strain. The redesign runs
-   found two candidates:
+2. **Change the frame design** so that a 2× expansion stays under 6–8% strain. Longer struts fix it;
+   tapering nearly does:
    - **12 cells, 10 mm struts:** under 6%, but with tall cells and low outward force.
-   - **The original layout with struts tapered from 0.4 to 0.15 mm:** 6.5%, borderline, and it keeps
-     the original layout's outward force.
+   - **The original layout with struts tapered from 0.4 to 0.15 mm:** 6.5%, borderline. No taper got under 6%.
 3. **Train and test on COMSOL trajectories.** Done: see the next section.
 
 ## COMSOL as training data

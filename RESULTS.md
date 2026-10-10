@@ -196,8 +196,9 @@ Full tables: `experiments/pinn_comsol_report.md`. VALVEBENCH leaderboard: `comso
    are positive in each condition, and with 4 designs there is no gain at all.
 
 **Limits.**
-- The COMSOL device is a solid ring with suture stiffness 1000× realistic, standing in for a softer lattice
-  (see `experiments/comsol_vs_synthetic.md`).
+- The COMSOL training device is a solid ring with sutures 1000× stiffer than realistic. Realistic sutures cannot
+  hold that ring (§7d), so the dataset is a stand-in. It represents the regime where sutures hold most of the
+  crimp (82% at implant), which realistic sutures do reach on the proposed lattice designs (98% and 81%, §7d).
 - The suture law (exponential stiffness decay) appears in both the simulator and the physics loss, so it is not
   independently tested. The material response, geometry and finite-element solution are.
 - Three seeds per secondary condition: read individual percentages as suggestive.
@@ -209,13 +210,14 @@ From `experiments/comsol_ring_report.md` and `experiments/comsol_vs_synthetic.md
 - Realistic sutures cannot hold a solid nitinol ring crimped (they supply 0.12 MPa; about 20 MPa is needed).
 - Halving the diameter of the rendered lattice (12 cells, 5.6 mm × 0.4 mm struts) puts 12.6% strain where the
   struts meet the junctions, above nitinol's 6–8% recoverable range. This is mesh-converged.
-- Two redesigns reach the 13 mm implant diameter:
-  - **12 cells with 10 mm struts:** 5.0–5.2% peak strain, recovers fully, but with 19 mm tall cells and 1.17 N
-    hoop tension per row.
-  - **The original layout with struts tapered 0.4 → 0.15 mm:** 6.5% peak strain (borderline), 17.7 N hoop
-    tension per row.
+- **Longer struts fix it; tapering nearly does.**
+  - **12 cells with 10 mm struts** is the only design under 6% (5.0–5.2%, mesh-checked). It recovers fully, but
+    has 19 mm tall cells and 1.17 N hoop tension per row.
+  - **Tapering the original layout's struts** reached 6.5% at best (0.4 → 0.15 mm), inside the 6–8% band.
+    A thinner middle (0.4 → 0.12 mm, 7.1%) and wider roots (0.5 → 0.15 mm, 8.4%) were worse. No taper got under 6%.
 - The sutures are tied one after another around the middle row, so each suture carries the row's full hoop
-  tension at 13 mm: 32.6 N for the rendered geometry, 17.7 N for the taper, 1.17 N for the 10 mm design.
+  tension. For the proposed designs at 13 mm, that is 1.17 N (10 mm struts) and 17.7 N (taper).
+- **Realistic sutures can hold the proposed lattice designs.** The 1000× suture stiffness in the ring model is a property of the solid-band stand-in, not of the device. With realistic sutures (0.3 mm, 1 GPa, 5 mm) tied one after another around the middle row, the frame's release force curve (lattice-cell model) and the sutures' series stiffness give these holding diameters: 10 mm design: held at 13.3 mm (98% of the crimp held, 1.1 N per suture, 12 sutures); taper: held at 15.5 mm (81% held, 9.1 N per suture), or 14.0 mm with 6 double-stranded sutures (14.3 N each). The 1000× ring holds 82% of its crimp at implant, the same regime. In series, more sutures make the hold softer, because their stretches add; doubling strands or using a thicker suture makes it stiffer. Reference strength: USP minimum knot-pull 2.68 kgf (about 26 N) for size 2-0 synthetic absorbable sutures.
 - Not modelled: fatigue under cardiac cycling.
 
 ## 8. Figures
