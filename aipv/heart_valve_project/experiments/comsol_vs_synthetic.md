@@ -19,7 +19,7 @@ Synthetic numbers below come from evaluating the generator over its full design 
 | 2 | Recovery is driven by material strain of at most 6% (ε_L), mapped onto a device diameter range of 1.5–2.2× (D₀ 6.8–9.0 mm → D_max 12–18 mm). README §9 states that a lattice "amplifies small material strains into large device deformations". | For the render's lattice (12 diamond cells, 5.6 mm struts), halving the diameter (26 → 13 mm) puts **9.7–12.9% peak strain** at the strut junctions for strut widths of 0.2–0.4 mm. All of these exceed the 6–8% recoverable range. The diameter where strain first passes 8% is 18.7–22.5 mm. | **Not supported** for this lattice at a 2× expansion. The amplification is real, but this geometry does not provide enough of it. |
 | 3 | All strain is recoverable: no plasticity or permanent set. | The COMSOL material model is also purely superelastic, so it cannot show permanent set. Strains above 6–8% in real nitinol cause permanent set, so recovery predicted past that point is not reported. | Shared limitation. It is a valid assumption only for designs that stay under 6–8%. |
 | 4 | Recovery follows a sigmoid in time. The median time to 50% recovery is 5 months, and 22% of designs never reach 50% within 12 months. | In the shape-memory regime (sutures 1000×), the ring is partly open at implant, then opens steadily as the sutures weaken. The curve has no initial plateau, and at k_diss = 0.15/month it is still rising at 12 months. | **Shape differs.** Both models agree on the trends: more sutures hold the scaffold tighter, and faster dissolution opens it sooner. |
-| 5 | Suture loads are not modelled; sutures act only through σ₀. | Each suture tied across the middle row must carry **11–33 N** of hoop tension at 13 mm, for strut widths 0.2–0.4 mm. | **New constraint.** Compare with the rated knot-pull strength of the suture. |
+| 5 | Suture loads are not modelled; sutures act only through σ₀. | With sutures tied one after another around the middle row, each suture carries the row's full hoop tension at 13 mm: **11–33 N** for straight struts 0.2–0.4 mm wide, 17.7 N for the best taper, 1.17 N for the 10 mm design. | **New constraint.** Compare with the rated knot-pull strength of the suture. |
 | 6 | Expansion comes from suture dissolution. | No-dissolution control (`k_diss` = 0): the diameter is constant to 5 decimal places for 12 months. | **Supported.** |
 
 ## What this means for the PINNVALVE results
@@ -102,11 +102,18 @@ deforms at a nearly constant stress and the bending concentrates there. Peak str
 6% transformation cap plus elastic strain, whatever the width. The 10 mm design never fully transforms
 anywhere (martensite 0.61), so it stays below that regime.
 
-**Suture load for this design.** The 1.17 N is the hoop tension carried through any cross-section of
-the row at 13 mm. It falls to 0.76 N at 16 mm and 0.46 N at 19.5 mm as the frame opens.
-- **Sutures tied one after another around the row:** each suture is in series with the frame, so each
-  carries the full 1.17 N.
-- **n sutures side by side across the same gap:** they share it, about 1.17 / n N each.
+**Suture load.** The sutures are tied one after another around the middle row, each closing a
+different gap. Each suture is therefore in series with the frame and carries the full hoop tension of
+the row:
+
+| Design | Load per suture at 13 mm |
+|---|---|
+| Rendered geometry (12 cells, 5.6 × 0.4 mm struts) | 32.6 N |
+| Tapered 0.4 → 0.15 mm (original layout) | 17.7 N |
+| 12 cells, 10 mm struts | 1.17 N, falling to 0.76 N at 16 mm and 0.46 N at 19.5 mm |
+
+Compare these with the rated knot-pull strength of the chosen absorbable suture. That strength also
+drops as the suture dissolves.
 
 Forces scale with the assumed 0.4 mm strut thickness.
 

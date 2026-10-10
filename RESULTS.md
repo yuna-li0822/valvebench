@@ -214,6 +214,8 @@ From `experiments/comsol_ring_report.md` and `experiments/comsol_vs_synthetic.md
     hoop tension per row.
   - **The original layout with struts tapered 0.4 → 0.15 mm:** 6.5% peak strain (borderline), 17.7 N hoop
     tension per row.
+- The sutures are tied one after another around the middle row, so each suture carries the row's full hoop
+  tension at 13 mm: 32.6 N for the rendered geometry, 17.7 N for the taper, 1.17 N for the 10 mm design.
 - Not modelled: fatigue under cardiac cycling.
 
 ## 8. Figures
