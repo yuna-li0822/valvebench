@@ -1,0 +1,217 @@
+import com.comsol.model.*;
+import com.comsol.model.util.*;
+
+/**
+ * Quarter of one diamond-lattice cell (unrolled, plane stress): one full strut
+ * between a quarter of the central X-node and a quarter of the corner X-node,
+ * with filleted crotches. Mirror symmetry on all four cell edges makes this
+ * exact for a uniformly crimped lattice. The hoop direction (x) is crimped from
+ * Dfree to Dfree*(1 - crimp/2), then released back to Dfree.
+ */
+public class __CLASS__ {
+  public static void main(String[] args) throws Exception { run(); }
+
+  // name ; fillet mm ; mesh divisions per strut width ; strut width mm ; thickness mm ; cells around ; strut length mm [; save path]
+  static String[] CASES = CASE_LIST;
+
+  static Model build(double rf, double hdiv, double w, double t, double Ncell, double L) {
+    double Dfree = 26.0;
+    double W = Math.PI * Dfree / Ncell;
+    double alpha = Math.acos(W / (2 * L));
+    double H = 2 * L * Math.sin(alpha);
+
+    Model m = ModelUtil.create("cell");
+    m.param().set("Dfree", Dfree + "[mm]");
+    m.param().set("L", L + "[mm]");
+    m.param().set("w", w + "[mm]");
+    m.param().set("tth", t + "[mm]");
+    m.param().set("rf", rf + "[mm]");
+    m.param().set("adeg", String.valueOf(Math.toDegrees(alpha)));
+    m.param().set("Wc", W + "[mm]");
+    m.param().set("Hc", H + "[mm]");
+    m.param().set("crimp", "0", "0 = free (Dfree), 1 = diameter halved");
+    m.param().set("stage", "1");
+
+    m.component().create("comp1", true);
+    var g = m.component("comp1").geom().create("geom1", 2);
+    g.lengthUnit("mm");
+    String[][] rects = {{"r1", "2*L+2*w", "0", "0", "adeg"}, {"r2", "2*L", "0", "0", "-adeg"},
+                        {"r3", "2*L", "Wc/2", "Hc/2", "-adeg"}};
+    for (String[] r : rects) {
+      g.create(r[0], "Rectangle");
+      g.feature(r[0]).set("base", "center");
+      g.feature(r[0]).set("size", new String[]{r[1], "w"});
+      g.feature(r[0]).set("pos", new String[]{r[2], r[3]});
+      g.feature(r[0]).set("rot", r[4]);
+    }
+    g.create("uni1", "Union");
+    g.feature("uni1").selection("input").set("r1", "r2", "r3");
+    g.feature("uni1").set("intbnd", false);
+    double[][] nodes = {{0, 0}, {W / 2, H / 2}};
+    for (int i = 0; i < 2; i++) {
+      g.create("bs" + i, "BallSelection");
+      g.feature("bs" + i).set("entitydim", 0);
+      g.feature("bs" + i).set("posx", nodes[i][0]);
+      g.feature("bs" + i).set("posy", nodes[i][1]);
+      g.feature("bs" + i).set("r", 0.6);
+      g.feature("bs" + i).set("condition", "inside");
+    }
+    g.create("uns", "UnionSelection");
+    g.feature("uns").set("entitydim", 0);
+    g.feature("uns").set("input", new String[]{"bs0", "bs1"});
+    g.create("fil1", "Fillet");
+    g.feature("fil1").selection("point").named("uns");
+    g.feature("fil1").set("radius", "rf");
+    g.create("q1", "Rectangle");
+    g.feature("q1").set("size", new String[]{"Wc/2", "Hc/2"});
+    g.feature("q1").set("pos", new String[]{"0", "0"});
+    g.create("int1", "Intersection");
+    g.feature("int1").selection("input").set("fil1", "q1");
+    g.run();
+
+    double e = 1e-4, big = 1e3;
+    double[][] boxes = {{-e, e, -big, big}, {-big, big, -e, e}, {W / 2 - e, W / 2 + e, -big, big}, {-big, big, H / 2 - e, H / 2 + e}};
+    String[] bn = {"x0", "z0", "xR", "zT"};
+    for (int i = 0; i < 4; i++) {
+      var s = m.component("comp1").selection().create(bn[i], "Box");
+      s.set("entitydim", 1);
+      s.set("xmin", boxes[i][0]); s.set("xmax", boxes[i][1]);
+      s.set("ymin", boxes[i][2]); s.set("ymax", boxes[i][3]);
+      s.set("condition", "inside");
+    }
+
+    var v = m.component("comp1").variable().create("var1");
+    v.set("D", "Dfree*(1-crimp/2)", "equivalent frame diameter");
+    v.set("emean", "(solid.eXX+solid.eYY)/2");
+    v.set("erad", "sqrt(((solid.eXX-solid.eYY)/2)^2+solid.eXY^2)");
+    v.set("epk", "max(abs(emean+erad),abs(emean-erad))", "largest in-plane principal strain magnitude");
+    var cpl = m.component("comp1").cpl().create("intR", "Integration");
+    cpl.selection().geom("geom1", 1);
+    cpl.selection().named("xR");
+    var cpl2 = m.component("comp1").cpl().create("aveT", "Average");
+    cpl2.selection().geom("geom1", 1);
+    cpl2.selection().named("zT");
+
+    var solid = m.component("comp1").physics().create("solid", "SolidMechanics", "geom1");
+    solid.prop("Type2D").set("Type2D", "PlaneStress");
+    solid.prop("d").set("d", "tth");
+    var sma = solid.create("sma1", "ShapeMemoryAlloy", 2);
+    sma.selection().all();
+    sma.set("ShapeMemoryAlloyModel", "Lagoudas");
+    sma.set("TransformationParameters", "Temperature");
+    sma.set("TransformationFunction", "Quadratic");
+    String[][] up = {
+      {"E_A", "47[GPa]"}, {"E_M", "20[GPa]"}, {"nu", "0.33"}, {"rho", "6450[kg/m^3]"},
+      {"Cp_A", "837[J/(kg*K)]"}, {"Cp_M", "837[J/(kg*K)]"},
+      {"TMs", "263.15[K]"}, {"TMf", "248.15[K]"}, {"TAs", "283.15[K]"}, {"TAf", "298.15[K]"},
+      {"CM", "6[MPa/K]"}, {"CA", "7[MPa/K]"}, {"etrmaxLagoudas", "0.06"}, {"sigmaStar", "200[MPa]"},
+      {"T0", "298.15[K]"}};
+    for (String[] p : up) { sma.set(p[0] + "_mat", "userdef"); sma.set(p[0], p[1]); }
+    sma.set("minput_temperature_src", "userdef");
+    sma.set("minput_temperature", "310.15[K]");
+    sma.set("minput_strainreferencetemperature_src", "userdef");
+    sma.set("minput_strainreferencetemperature", "310.15[K]");
+    sma.feature("trdir1").set("TransformationDirectionType", "UserDefined");
+    sma.feature("trdir1").set("trdir", "if(stage<1.5, 1, -1)");
+
+    var sx = solid.create("symx", "Displacement1", 1);
+    sx.selection().named("x0"); sx.setIndex("Direction", "prescribed", 0); sx.setIndex("U0", "0", 0);
+    var sz = solid.create("symz", "Displacement1", 1);
+    sz.selection().named("z0"); sz.setIndex("Direction", "prescribed", 1); sz.setIndex("U0", "0", 1);
+    var cr = solid.create("crimpBC", "Displacement1", 1);
+    cr.selection().named("xR"); cr.setIndex("Direction", "prescribed", 0); cr.setIndex("U0", "-Wc/4*crimp", 0);
+    var rc = solid.create("rc1", "RigidConnector", 1);
+    rc.selection().named("zT");
+    try {
+      String[] allowed = rc.getAllowedPropertyValues("RotationType");
+      System.out.println("RC RotationType allowed: " + java.util.Arrays.toString(allowed));
+      for (String a : allowed) if (a.toLowerCase().contains("prescribed") || a.toLowerCase().contains("fixed")) { rc.set("RotationType", a); break; }
+      System.out.println("RC RotationType = " + rc.getString("RotationType"));
+    } catch (Exception ex) { System.out.println("RC rotation setting: " + ex.getMessage()); }
+
+    var mesh = m.component("comp1").mesh().create("mesh1");
+    mesh.create("ftri1", "FreeTri");
+    mesh.feature("size").set("custom", "on");
+    mesh.feature("size").set("hmax", w / hdiv);
+    mesh.feature("size").set("hmin", w / hdiv / 4);
+    mesh.run();
+    System.out.println("MESH elems=" + mesh.getNumElem() + " W=" + W + " H=" + H + " alpha=" + Math.toDegrees(alpha));
+
+    String[][] st = {{"std1", "CRIMP_LIST", "1"}, {"std2", "UNLOAD_LIST", "2"}};
+    for (int k = 0; k < 2; k++) {
+      m.study().create(st[k][0]);
+      var s = m.study(st[k][0]).create("stat", "Stationary");
+      s.set("geometricNonlinearity", true);
+      s.set("useparam", true);
+      s.set("sweeptype", "filled");
+      s.setIndex("pname", "stage", 0); s.setIndex("plistarr", st[k][2], 0); s.setIndex("punit", "", 0);
+      s.setIndex("pname", "crimp", 1); s.setIndex("plistarr", st[k][1], 1); s.setIndex("punit", "", 1);
+      if (k == 1) {
+        s.set("useinitsol", true); s.set("initmethod", "sol"); s.set("initstudy", "std1"); s.set("solnum", "last");
+      }
+      m.study(st[k][0]).createAutoSequences("all");
+      var p1 = m.sol("sol" + (k + 1)).feature("s1").feature("p1");
+      p1.set("paramtuning", true);
+      p1.set("pminstep", "1e-6");
+      m.sol("sol" + (k + 1)).feature("s1").feature("fc1").set("maxiter", 100);
+    }
+    return m;
+  }
+
+  static double report(Model m, String label, String sol) {
+    String d = "d_" + label;
+    m.result().dataset().create(d, "Solution");
+    m.result().dataset(d).set("solution", sol);
+    m.result().numerical().create("g" + label, "EvalGlobal");
+    m.result().numerical("g" + label).set("data", d);
+    m.result().numerical("g" + label).set("expr", new String[]{"crimp", "D", "intR(reacf(u))", "aveT(v)", "intR(solid.sx*tth)", "intR(solid.PxX*tth)"});
+    m.result().numerical("g" + label).set("unit", new String[]{"1", "mm", "N", "mm", "N", "N"});
+    double[][] gv = m.result().numerical("g" + label).getReal();
+    m.result().numerical().create("x" + label, "MaxSurface");
+    m.result().numerical("x" + label).set("data", d);
+    m.result().numerical("x" + label).selection().all();
+    m.result().numerical("x" + label).set("expr", new String[]{"epk", "solid.xi", "solid.misesGp"});
+    m.result().numerical("x" + label).set("unit", new String[]{"1", "1", "MPa"});
+    double[][] x = m.result().numerical("x" + label).getReal();
+    m.result().numerical().create("v" + label, "AvSurface");
+    m.result().numerical("v" + label).set("data", d);
+    m.result().numerical("v" + label).selection().all();
+    m.result().numerical("v" + label).set("expr", new String[]{"solid.xi"});
+    double[][] v = m.result().numerical("v" + label).getReal();
+    int n = gv[0].length;
+    for (int i = 0; i < n; i++)
+      System.out.printf("ROW,%s,%.4f,%.4f,%.6g,%.6g,%.6f,%.6f,%.6f,%.3f,%.6g,%.6g%n", label, gv[0][i], gv[1][i], gv[2][i], gv[3][i],
+                        x[0][i], x[1][i], v[0][i], x[2][i], gv[4][i], gv[5][i]);
+    m.result().numerical().remove("g" + label);
+    m.result().numerical().remove("x" + label);
+    m.result().numerical().remove("v" + label);
+    m.result().dataset().remove(d);
+    return x[0][n - 1];
+  }
+
+  public static Model run() throws Exception {
+    Model m = null;
+    for (String c : CASES) {
+      String[] f = c.split(";");
+      try {
+        if (m != null) ModelUtil.remove("cell");
+        m = build(Double.parseDouble(f[1]), Double.parseDouble(f[2]), Double.parseDouble(f[3]), Double.parseDouble(f[4]),
+                  Double.parseDouble(f[5]), Double.parseDouble(f[6]));
+        long t0 = System.currentTimeMillis();
+        m.sol("sol1").runAll();
+        double peak = report(m, f[0] + "__crimp", "sol1");
+        // Release only if the crimp stays within the recoverable range; past it the model's
+        // recovery is not physical (no plasticity) and the release solve is slow.
+        if (peak < 0.08) {
+          m.sol("sol2").runAll();
+          report(m, f[0] + "__unload", "sol2");
+        }
+        System.out.println("CASEOK," + f[0] + "," + (System.currentTimeMillis() - t0) / 1000.0);
+        if (f.length > 7) m.save(f[7]);
+      } catch (Exception e) {
+        System.out.println("CASEFAIL," + f[0] + "," + String.valueOf(e.getMessage()).replace('\n', ' '));
+      }
+    }
+    return m;
+  }
+}

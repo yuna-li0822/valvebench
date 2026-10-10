@@ -1,0 +1,259 @@
+import com.comsol.model.*;
+import com.comsol.model.util.*;
+
+/**
+ * 2D-axisymmetric COMSOL model of a superelastic nitinol ring (R 11-13 mm, H 5 mm):
+ *   std1 Crimp   - outer radius prescribed inward by U0*crimp (forward transformation)
+ *   std2 Unload  - a stiff "crimper spring" anchored at the crimped radius is relaxed
+ *                  (rel 0 -> 1) so the sutures take over at t_month = 0
+ *   std3 Release - suture stiffness Kt = K0*exp(-k_diss*t_month) decays over 12 months
+ * Generated into a per-batch class by experiments/comsol/run_ring_sweep.py, which
+ * fills in the class name, the case list and the optional .mph save target.
+ */
+public class __CLASS__ {
+  public static void main(String[] args) throws Exception { run(); }
+
+  static Model build(String meshSize) {
+    Model m = ModelUtil.create("ring");
+    m.param().set("Rin", "11[mm]");
+    m.param().set("Rout", "13[mm]");
+    m.param().set("H", "5[mm]");
+    m.param().set("U0", "0.5[mm]", "crimp radial displacement");
+    m.param().set("crimp", "0");
+    m.param().set("stage", "1", "1 = loading (forward), 2 = unloading (reverse)");
+    m.param().set("rel", "0");
+    m.param().set("t_month", "0");
+    m.param().set("k_diss", "0.15");
+    m.param().set("N_sut", "7");
+    m.param().set("E_sut", "1[GPa]");
+    m.param().set("d_sut", "0.3[mm]");
+    m.param().set("L_sut", "5[mm]");
+    m.param().set("K_scale", "1");
+    m.param().set("A_out", "2*pi*Rout*H");
+    m.param().set("K0", "K_scale*N_sut*E_sut*(pi*d_sut^2/4)/L_sut/A_out");
+    m.param().set("Kc", "1e13[N/m^3]");
+
+    m.component().create("comp1", true);
+    m.component("comp1").geom().create("geom1", 2);
+    m.component("comp1").geom("geom1").axisymmetric(true);
+    m.component("comp1").geom("geom1").lengthUnit("mm");
+    m.component("comp1").geom("geom1").create("r1", "Rectangle");
+    m.component("comp1").geom("geom1").feature("r1").set("pos", new String[]{"Rin", "0"});
+    m.component("comp1").geom("geom1").feature("r1").set("size", new String[]{"Rout-Rin", "H"});
+    m.component("comp1").geom("geom1").run();
+
+    m.component("comp1").selection().create("outer", "Box");
+    m.component("comp1").selection("outer").set("entitydim", 1);
+    m.component("comp1").selection("outer").set("xmin", 12.99);
+    m.component("comp1").selection("outer").set("xmax", 13.01);
+    m.component("comp1").selection("outer").set("condition", "inside");
+    m.component("comp1").selection().create("anchor", "Box");
+    m.component("comp1").selection("anchor").set("entitydim", 0);
+    m.component("comp1").selection("anchor").set("xmin", 12.99);
+    m.component("comp1").selection("anchor").set("xmax", 13.01);
+    m.component("comp1").selection("anchor").set("ymin", -0.01);
+    m.component("comp1").selection("anchor").set("ymax", 0.01);
+    m.component("comp1").selection("anchor").set("condition", "inside");
+
+    m.component("comp1").variable().create("var1");
+    m.component("comp1").variable("var1").set("Kt", "K0*exp(-k_diss*t_month)");
+    m.component("comp1").variable("var1").set("D", "2*(R+u)");
+
+    m.component("comp1").physics().create("solid", "SolidMechanics", "geom1");
+    var sma = m.component("comp1").physics("solid").create("sma1", "ShapeMemoryAlloy", 2);
+    sma.selection().all();
+    sma.set("ShapeMemoryAlloyModel", "Lagoudas");
+    sma.set("TransformationParameters", "Temperature");
+    sma.set("TransformationFunction", "Quadratic");
+    String[][] up = {
+      {"E_A", "47[GPa]"}, {"E_M", "20[GPa]"}, {"nu", "0.33"}, {"rho", "6450[kg/m^3]"},
+      {"Cp_A", "837[J/(kg*K)]"}, {"Cp_M", "837[J/(kg*K)]"},
+      {"TMs", "263.15[K]"}, {"TMf", "248.15[K]"}, {"TAs", "283.15[K]"}, {"TAf", "298.15[K]"},
+      {"CM", "6[MPa/K]"}, {"CA", "7[MPa/K]"}, {"etrmaxLagoudas", "0.06"}, {"sigmaStar", "200[MPa]"},
+      {"T0", "298.15[K]"}};
+    for (String[] p : up) { sma.set(p[0] + "_mat", "userdef"); sma.set(p[0], p[1]); }
+    sma.set("minput_temperature_src", "userdef");
+    sma.set("minput_temperature", "310.15[K]");
+    sma.set("minput_strainreferencetemperature_src", "userdef");
+    sma.set("minput_strainreferencetemperature", "310.15[K]");
+    for (String t : sma.feature().tags()) System.out.println("SMA sub: " + t);
+    try {
+      sma.feature("trdir1").set("TransformationDirectionType", "UserDefined");
+      sma.feature("trdir1").set("trdir", "if(stage<1.5, 1, -1)");
+    } catch (Exception e) {
+      System.out.println("no trdir1 subnode by default: " + e.getMessage());
+    }
+
+    var crimpBC = m.component("comp1").physics("solid").create("disp1", "Displacement1", 1);
+    crimpBC.selection().named("outer");
+    crimpBC.setIndex("Direction", "prescribed", 0);
+    crimpBC.setIndex("U0", "-U0*crimp", 0);
+    crimpBC.label("Crimper (prescribed)");
+
+    var anc = m.component("comp1").physics("solid").create("disp0", "Displacement0", 0);
+    anc.selection().named("anchor");
+    anc.setIndex("Direction", "prescribed", 2);
+    anc.setIndex("U0", "0", 2);
+    anc.label("Axial anchor");
+
+    var cs = m.component("comp1").physics("solid").create("bndl2", "BoundaryLoad", 1);
+    cs.selection().named("outer");
+    cs.setIndex("forceReferenceArea", "-Kc*(10^(-6*rel)-1e-6)*(u+U0)", 0);
+    cs.label("Crimper spring (unload)");
+
+    var sl = m.component("comp1").physics("solid").create("bndl1", "BoundaryLoad", 1);
+    sl.selection().named("outer");
+    sl.setIndex("forceReferenceArea", "-Kt*(u+U0)", 0);
+    sl.label("Suture load");
+
+    String[] ne = meshSize.split(",");
+    m.component("comp1").mesh().create("mesh1");
+    m.component("comp1").mesh("mesh1").create("map1", "Map");
+    m.component("comp1").mesh("mesh1").feature("map1").create("dis1", "Distribution");
+    m.component("comp1").mesh("mesh1").feature("map1").feature("dis1").selection().set(1, 4);
+    m.component("comp1").mesh("mesh1").feature("map1").feature("dis1").set("numelem", ne[1]);
+    m.component("comp1").mesh("mesh1").feature("map1").create("dis2", "Distribution");
+    m.component("comp1").mesh("mesh1").feature("map1").feature("dis2").selection().set(2, 3);
+    m.component("comp1").mesh("mesh1").feature("map1").feature("dis2").set("numelem", ne[0]);
+    m.component("comp1").mesh("mesh1").run();
+    System.out.println("MESH elems=" + m.component("comp1").mesh("mesh1").getNumElem());
+
+    // Study 1: crimp. The crimper prescribes the outer radius; no sutures or crimper spring.
+    m.study().create("std1");
+    var s1 = m.study("std1").create("stat", "Stationary");
+    s1.set("geometricNonlinearity", true);
+    s1.set("useparam", true);
+    s1.setIndex("pname", "crimp", 0);
+    s1.setIndex("plistarr", "range(0,0.02,1)", 0);
+    s1.setIndex("punit", "", 0);
+    s1.set("useadvanceddisable", true);
+    s1.set("disabledphysics", new String[]{"solid/bndl1", "solid/bndl2"});
+
+    // Study 2: hand the ring over from the crimper to the sutures (t_month = 0).
+    m.study().create("std2");
+    var s2 = m.study("std2").create("stat", "Stationary");
+    s2.set("geometricNonlinearity", true);
+    s2.set("useparam", true);
+    s2.setIndex("pname", "stage", 0);
+    s2.setIndex("plistarr", "2", 0);
+    s2.setIndex("punit", "", 0);
+    s2.setIndex("pname", "rel", 1);
+    s2.setIndex("plistarr", "range(0,0.01,0.9) range(0.905,0.005,1)", 1);
+    s2.setIndex("punit", "", 1);
+    s2.set("sweeptype", "filled");
+    s2.set("useadvanceddisable", true);
+    s2.set("disabledphysics", new String[]{"solid/disp1"});
+    s2.set("useinitsol", true);
+    s2.set("initmethod", "sol");
+    s2.set("initstudy", "std1");
+    s2.set("solnum", "last");
+
+    // Study 3: sutures dissolve over 12 months.
+    m.study().create("std3");
+    var s3 = m.study("std3").create("stat", "Stationary");
+    s3.set("geometricNonlinearity", true);
+    s3.set("useparam", true);
+    s3.setIndex("pname", "stage", 0);
+    s3.setIndex("plistarr", "2", 0);
+    s3.setIndex("punit", "", 0);
+    s3.setIndex("pname", "rel", 1);
+    s3.setIndex("plistarr", "1", 1);
+    s3.setIndex("punit", "", 1);
+    s3.setIndex("pname", "t_month", 2);
+    s3.setIndex("plistarr", "range(0,0.5,12)", 2);
+    s3.setIndex("punit", "", 2);
+    s3.set("sweeptype", "filled");
+    s3.set("useadvanceddisable", true);
+    s3.set("disabledphysics", new String[]{"solid/disp1"});
+    s3.set("useinitsol", true);
+    s3.set("initmethod", "sol");
+    s3.set("initstudy", "std2");
+    s3.set("solnum", "last");
+
+    // Robust solver settings: adaptive parameter steps and more Newton iterations.
+    for (int k = 1; k <= 3; k++) {
+      m.study("std" + k).createAutoSequences("all");
+      String sol = "sol" + k;
+      var p1 = m.sol(sol).feature("s1").feature("p1");
+      p1.set("paramtuning", true);
+      p1.set("pminstep", "1e-6");
+      var fc = m.sol(sol).feature("s1").feature("fc1");
+      fc.set("maxiter", 100);
+      fc.set("dtech", "auto");
+    }
+    return m;
+  }
+
+  static void report(Model m, String label, String solTag) {
+    String d = "d_" + label;
+    m.result().dataset().create(d, "Solution");
+    m.result().dataset(d).set("solution", solTag);
+    m.result().numerical().create("a" + label, "AvLine");
+    m.result().numerical("a" + label).set("data", d);
+    m.result().numerical("a" + label).selection().named("outer");
+    m.result().numerical("a" + label).set("expr", new String[]{"D", "Kt*(u+U0)", "crimp", "rel", "t_month"});
+    m.result().numerical("a" + label).set("unit", new String[]{"mm", "MPa", "1", "1", "1"});
+    double[][] a = m.result().numerical("a" + label).getReal();
+    m.result().numerical().create("x" + label, "MaxSurface");
+    m.result().numerical("x" + label).set("data", d);
+    m.result().numerical("x" + label).selection().all();
+    m.result().numerical("x" + label).set("expr", new String[]{"solid.xi", "solid.misesGp"});
+    m.result().numerical("x" + label).set("unit", new String[]{"1", "MPa"});
+    double[][] x = m.result().numerical("x" + label).getReal();
+    m.result().numerical().create("v" + label, "AvSurface");
+    m.result().numerical("v" + label).set("data", d);
+    m.result().numerical("v" + label).selection().all();
+    m.result().numerical("v" + label).set("expr", new String[]{"solid.xi"});
+    double[][] v = m.result().numerical("v" + label).getReal();
+    int n = a[0].length;
+    System.out.println("== " + label + " (" + n + " pts)  cols: idx,D_mm,avg_xi,max_xi,max_mises_MPa,suture_pressure_MPa");
+    for (int i = 0; i < n; i++)
+      System.out.printf("ROW,%s,%d,%.6f,%.6f,%.6f,%.3f,%.6g,%.6g,%.6g,%.6g%n", label, i, a[0][i], v[0][i], x[0][i], x[1][i], a[1][i], a[2][i], a[3][i], a[4][i]);
+    m.result().numerical().remove("a" + label);
+    m.result().numerical().remove("x" + label);
+    m.result().numerical().remove("v" + label);
+    m.result().dataset().remove(d);
+  }
+
+  static final String[][] SMA_DEFAULTS = {
+    {"E_A", "47[GPa]"}, {"TAf", "298.15[K]"}, {"TAs", "283.15[K]"}, {"etrmaxLagoudas", "0.06"}};
+
+  // Each case: name ; mesh "nr,nz" ; K_scale ; N_sut ; k_diss ; sma overrides "key=val|key=val"
+  static String[] CASES = CASE_LIST;
+
+  public static Model run() throws Exception {
+    Model m = null;
+    String builtMesh = "";
+    for (String c : CASES) {
+      String[] f = c.split(";", -1);
+      String name = f[0], mesh = f[1];
+      try {
+        if (!mesh.equals(builtMesh)) {
+          if (m != null) ModelUtil.remove("ring");
+          m = build(mesh);
+          builtMesh = mesh;
+        }
+        m.param().set("K_scale", f[2]);
+        m.param().set("N_sut", f[3]);
+        m.param().set("k_diss", f[4]);
+        var sma = m.component("comp1").physics("solid").feature("sma1");
+        for (String[] d : SMA_DEFAULTS) sma.set(d[0], d[1]);
+        if (!f[5].isEmpty())
+          for (String kv : f[5].split("[|]")) { String[] p = kv.split("="); sma.set(p[0], p[1]); }
+        String[] st = {"std1", "std2", "std3"};
+        String[] lb = {"crimp", "unload", "release"};
+        long t0 = System.currentTimeMillis();
+        for (int i = 0; i < 3; i++) {
+          m.sol("sol" + (i + 1)).runAll();
+          String[] sols = m.sol().tags();
+          report(m, name + "__" + lb[i], sols[i]);
+        }
+        System.out.println("CASEOK," + name + "," + (System.currentTimeMillis() - t0) / 1000.0);
+        if (name.equals(SAVE_CASE)) m.save(SAVE_PATH);
+      } catch (Exception e) {
+        System.out.println("CASEFAIL," + name + "," + String.valueOf(e.getMessage()).replace('\n', ' '));
+      }
+    }
+    return m;
+  }
+}

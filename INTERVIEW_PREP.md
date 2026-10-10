@@ -46,15 +46,19 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 
 ## COMSOL: what it is and isn't
 
-- One real COMSOL run of a crimped nitinol frame recovering on heating. It gave a phase-fraction curve: austenite rising from about 0 to about 0.93 over the simulated window, with a delayed start.
-- It is a **qualitative** shape check. It falls in the direction and range the Brinson law predicts, but a straight line fits it as well or better than the cosine, so it can't confirm the cosine shape. There was no stress output and no scaffold design parameters, so I can't compare it to the trained model.
-- In progress: a parametric sweep to make a small physical-simulation test set.
+- **Two scripted COMSOL models plus a hand-built 3D one:** an axisymmetric solid nitinol ring (52 runs) and a lattice cell with the estimated strut geometry. Each was checked for mesh and step-size convergence, against a no-dissolution control, and against the other model (49.6 vs 49.5 N suture force).
+- **What it confirms:** every design trend in the training data. More sutures hold the scaffold tighter, faster dissolution opens it sooner, Af matters most, and dissolution is the only driver of expansion.
+- **What it contradicts:**
+  - Realistic sutures can't hold a solid ring crimped (0.12 MPa supplied vs about 20 MPa needed).
+  - Halving the diameter of the estimated lattice puts 9.7–12.9% strain at the strut junctions, above nitinol's 6–8% recoverable limit.
+- **So:** my ML conclusions are about how well a physics-informed network learns the modelled law. The absolute diameters describe an idealised scaffold, not this exact device.
+- **Withdrawn:** the earlier single COMSOL phase-fraction run. Its curve contradicted the run's own forced transformation direction, so I no longer use it as a shape check.
 
 ## Hard questions, short answers
 
 - **Why synthetic data?** No public dataset links scaffold design to expansion, and I don't have lab access. I made the synthetic side as literature-grounded as I could and labelled everything.
 - **Is this novel?** The physics-informed method isn't new. The application (Brinson/Auricchio-Sacco physics in a network for a growth-adaptive pediatric valve scaffold) and the rigorous, honest test of when it helps appear to be, based on my literature search. I can't claim nobody has done it anywhere.
-- **What would change your conclusion?** A real-data or COMSOL test set where physics improves diameter error, or a regime (sparser or noisier data) where the gain grows.
+- **What would change your conclusion?** A real-data or COMSOL test set of a feasible frame design where physics improves diameter error, or a regime (sparser or noisier data) where the gain grows.
 - **Did you tune hyperparameters?** Physics weight was swept (0.1–20) on a separate validation set. Architecture, learning rate and epochs were set by hand and not tuned; I say so.
 - **Is it clinically useful?** No. It's a computational design tool; benchtop, hydrodynamic and biological validation are required first.
 - **Why 5 seeds?** Single runs mislead. All results are mean ± SD across 5 seeds and I report how many seeds went each way.

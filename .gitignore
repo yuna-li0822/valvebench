@@ -3,3 +3,6 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
+
+# COMSOL model files (large; rebuild from experiments/comsol/*.java.template)
+*.mph

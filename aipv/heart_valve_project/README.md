@@ -96,7 +96,7 @@ For PINNVALVE specifically, there's a **third**, separate dataset (`ood_shell_da
 - No temperature dependence — isothermal.
 - No literal claim that material-level strain equals device-level diameter change: a real strut/lattice scaffold amplifies small material strains into large device deformations, which would require the actual strut geometry (out of scope). The generator maps a physically-derived *recovery fraction* onto a separately-modeled device-level diameter range instead — see `sma_constitutive.py`'s docstring.
 - Material constants are round values inside published ranges (with a literature preset for sensitivity checks), **not calibrated against a measured nitinol sample**.
-- No coupling to a real FEM/COMSOL simulation. One real COMSOL run is used only as a qualitative shape check (§10b), and a parametric COMSOL sweep is in progress.
+- No coupling to a real FEM/COMSOL simulation during training. COMSOL models (an axisymmetric nitinol ring and a diamond lattice cell) were used afterwards to test the generator's assumptions; two of them are contradicted for the estimated frame geometry (see `experiments/comsol_vs_synthetic.md`).
 
 ## 10. Major results (see RESULTS.md for the full accounting)
 
@@ -138,7 +138,7 @@ py -3 aipv/heart_valve_project/valvebench/evaluation/generate_scaffold_leaderboa
 py -3 aipv/heart_valve_project/experiments/pinn_train.py                                # -> experiments/pinnvalve_ablation_report.md
 py -3 aipv/heart_valve_project/experiments/error_analysis.py                            # -> experiments/error_analysis_report.md
 py -3 aipv/heart_valve_project/experiments/generate_figures.py                          # -> experiments/figures/*.png
-py -3 aipv/heart_valve_project/experiments/generate_extra_figures.py                    # -> COMSOL shape check, results table, data overview, error-by-region
+py -3 aipv/heart_valve_project/experiments/generate_extra_figures.py                    # -> results table, data overview, error-by-region (its COMSOL shape-check figure is withdrawn, see §12)
 py -3 aipv/heart_valve_project/experiments/material_sensitivity.py                      # -> experiments/material_sensitivity_report.md
 py -3 aipv/heart_valve_project/experiments/extrapolation_and_sparsity.py                # -> experiments/extrapolation_and_sparsity_report.md
 py -3 aipv/heart_valve_project/experiments/comsol_validation.py --comsol-csv <your export>  # compare a COMSOL export to both models
@@ -155,7 +155,9 @@ Every generator, split, and model accepts an explicit `seed`; the multi-seed har
 - **VALVEBENCH is the synthetic-data-only benchmark.** The larger "open public benchmark" version of the original spec — MMWHS/ImageCHD/SegTHOR/NIH-3D ingestion actually populated with data, transcribed Pettersen/Zilberman tables, a live literature-regression baseline — is **not implemented** (CDC anthropometrics and the PHN annulus model are now used in the generator, but no real patient records are). Loaders/scaffolding exist (`valvebench/datasets/imaging/`, `valvebench/datasets/literature_tables.py`) but require data this environment doesn't have verified access to.
 - **PINNVALVE's headline diameter-accuracy claim did not survive a corrected evaluation methodology** (see §13) — this is reported as a negative result, not hidden.
 - **The physics model is a documented simplification** of a full thermomechanical SMA constitutive law (§9).
-- **No real FEM/COMSOL coupling.** Only a single COMSOL run (phase-fraction curve; no stress output; no scaffold design parameters) exists, used as a qualitative shape check, not a validation.
+- **COMSOL contradicts two generator assumptions for the estimated device.** Realistic sutures cannot hold a solid nitinol ring crimped, and halving the diameter of the estimated lattice (12 cells, 5.6 mm struts) gives 9.7–12.9% peak strut strain, above the 6–8% recoverable range. The method comparisons are unaffected; absolute diameter predictions should not be read as device predictions (`experiments/comsol_vs_synthetic.md`). The earlier single COMSOL phase-fraction run is withdrawn as a shape check: its curve contradicted the run's own forced transformation direction.
+- **The one lattice design that survives the 26 → 13 mm crimp trades away height and radial force.** It has 12 cells and 10 mm struts. Its cells are about 19 mm tall (about one row in a 20–25 mm frame), and its outward force is about 50× lower than the rendered geometry's (about 9 kPa vs 0.48 MPa equivalent pressure at 13 mm). Anchoring and sealing were not evaluated.
+- **Fatigue under cardiac cycling is not modelled.** The COMSOL models simulate one monotonic crimp and release; an implanted frame sees tens of millions of pulsatile cycles per year, and nitinol fatigue is governed by alternating strain at the strut junctions, which is not computed here.
 - Sample sizes in the data-efficiency and noise-robustness experiments are modest (3 seeds per condition) — the trends are consistent and physically sensible, but individual percentages should be read as suggestive, not tightly bounded.
 
 ## 13. What changed on the second audit pass (read this if you're deciding whether to trust the numbers above)
@@ -175,7 +177,7 @@ Full details, every number before and after, and the reasoning behind each fix a
 
 ## 14. Future work
 
-- **COMSOL sweep (in progress):** a parametric sweep over suture count, stiffness, dissolution rate and fold angle, exporting outer-boundary diameter, stress and phase fraction, to serve as a physical-simulation test set for both models (`experiments/comsol_validation.py` is ready for it).
+- **Constrain the generator with the COMSOL limits** (recoverable expansion ratio for a given lattice, non-zero recovery at implant with compliant sutures) and retrain; then validate on COMSOL trajectories of a feasible frame design (`experiments/comsol_validation.py`). COMSOL runs completed so far: `experiments/comsol_ring_report.md`.
 - Real public-dataset ingestion for VALVEBENCH (the loaders exist; the data doesn't), and real congenital-heart-disease annulus data in place of the healthy-children reference model.
 - Second-source check of the annulus model against Pettersen et al. 2008 (needs library access).
 - Forward transformation kinetics and temperature dependence in the SMA model.
@@ -185,7 +187,7 @@ Full details, every number before and after, and the reasoning behind each fix a
 ## Repository structure
 
 - `CITATIONS.md` — every source, what it is used for, its verification status, and every modeling assumption
-- `data/` — legacy v0.1 CSV exports (`data/synthetic/`); `data/cdc/` (bundled CDC growth-chart tables + SHA256s); `data/comsol/` (COMSOL export template and the phase-fraction points); `data/literature/` (placeholder templates, see §12)
+- `data/` — legacy v0.1 CSV exports (`data/synthetic/`); `data/cdc/` (bundled CDC growth-chart tables + SHA256s); `data/comsol/` (COMSOL runs, run log, export template; see `experiments/comsol/README.md`); `data/literature/` (placeholder templates, see §12)
 - `valvebench/` — `datasets/` (synthetic + real-data loaders), `models/` (baselines + PINN models), `physics/`, `tasks/`, `evaluation/` (metrics + plots + both leaderboard generators), `baselines/` (thin re-exports of `models/`, kept for the file paths named in the project plan), `cli.py` (`valvebench run --all`)
 - `experiments/` — `pinn_train.py` (ablation), `error_analysis.py` (per-region failure breakdown), `generate_figures.py` and `generate_extra_figures.py` (all figures), `material_sensitivity.py`, `extrapolation_and_sparsity.py`, `comsol_validation.py`, `figures/` (output PNGs)
 - `scripts/` — `run_baseline.py`, `export_to_hf.py`

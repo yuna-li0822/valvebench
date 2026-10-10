@@ -1,0 +1,20 @@
+# name;fillet mm;mesh elements per strut width;strut width mm;thickness mm;cells around;strut length mm  (see run_cell_sweep.py)
+# estimated geometry from the render: 12 cells, 5.6 mm struts
+base;0.2;8;0.4;0.4;12;5.6
+mesh4;0.2;4;0.4;0.4;12;5.6
+mesh16;0.2;16;0.4;0.4;12;5.6
+rf0.1;0.1;8;0.4;0.4;12;5.6
+rf0.3;0.3;8;0.4;0.4;12;5.6
+w0.2;0.1;8;0.2;0.4;12;5.6
+w0.25;0.125;8;0.25;0.4;12;5.6
+w0.3;0.15;8;0.3;0.4;12;5.6
+w0.5;0.25;8;0.5;0.4;12;5.6
+# redesigns: more cells around, longer struts
+N18_w0.2;0.1;6;0.2;0.4;18;5.6
+N18_w0.3;0.15;6;0.3;0.4;18;5.6
+N24_w0.2;0.1;6;0.2;0.4;24;5.6
+N24_w0.3;0.15;6;0.3;0.4;24;5.6
+L8_w0.25;0.125;6;0.25;0.4;12;8
+L10_w0.25;0.125;6;0.25;0.4;12;10
+L10_w0.25_mesh12;0.125;12;0.25;0.4;12;10
+L10_w0.25_rf0.2;0.2;6;0.25;0.4;12;10

@@ -1,0 +1,125 @@
+# What the COMSOL simulations say about the synthetic training data
+
+PINNVALVE is trained and tested only on trajectories from the synthetic generator
+(`valvebench/datasets/synthetic.py`, `scaffold_state_at_sma`). The COMSOL work is the first
+check of that generator's physical assumptions that does not reuse its own equations. This
+note lists each assumption, what COMSOL found, and what that means for the ML results.
+
+Sources: `experiments/comsol_ring_report.md` (all COMSOL tables and figures),
+`data/comsol/comsol_ring_runs.csv` (axisymmetric ring, 52 runs),
+`data/comsol/comsol_cell_runs.csv` (lattice cell), and `data/comsol/RUN_LOG.md` (hand-built 3D model).
+Synthetic numbers below come from evaluating the generator over its full design box
+(`FULL_PARAM_RANGES`).
+
+## Assumptions and findings
+
+| # | Synthetic generator assumes | COMSOL finding | Verdict |
+|---|---|---|---|
+| 1 | The scaffold is held fully crimped at implant (recovery fraction 0 at t = 0 for every design). The constraint stress is σ₀ = 150 MPa × (N/7) × stiffness, which ranges from 43 to 589 MPa (median 209 MPa). | A solid nitinol ring needs about 20 MPa of outward pressure to stay crimped. Realistic sutures (7 × 0.3 mm, E = 1 GPa) supply 0.12 MPa, so the ring springs back to 99.96% of its free size at implant. It is held partly crimped only when the sutures are about 300× stiffer, and its recovery at implant is then 0.15–0.30, not 0. | **Not supported** with realistic sutures on a solid ring. |
+| 2 | Recovery is driven by material strain of at most 6% (ε_L), mapped onto a device diameter range of 1.5–2.2× (D₀ 6.8–9.0 mm → D_max 12–18 mm). README §9 states that a lattice "amplifies small material strains into large device deformations". | For the render's lattice (12 diamond cells, 5.6 mm struts), halving the diameter (26 → 13 mm) puts **9.7–12.9% peak strain** at the strut junctions for strut widths of 0.2–0.4 mm. All of these exceed the 6–8% recoverable range. The diameter where strain first passes 8% is 18.7–22.5 mm. | **Not supported** for this lattice at a 2× expansion. The amplification is real, but this geometry does not provide enough of it. |
+| 3 | All strain is recoverable: no plasticity or permanent set. | The COMSOL material model is also purely superelastic, so it cannot show permanent set. Strains above 6–8% in real nitinol cause permanent set, so recovery predicted past that point is not reported. | Shared limitation. It is a valid assumption only for designs that stay under 6–8%. |
+| 4 | Recovery follows a sigmoid in time. The median time to 50% recovery is 5 months, and 22% of designs never reach 50% within 12 months. | In the shape-memory regime (sutures 1000×), the ring is partly open at implant, then opens steadily as the sutures weaken. The curve has no initial plateau, and at k_diss = 0.15/month it is still rising at 12 months. | **Shape differs.** Both models agree on the trends: more sutures hold the scaffold tighter, and faster dissolution opens it sooner. |
+| 5 | Suture loads are not modelled; sutures act only through σ₀. | Each suture tied across the middle row must carry **11–33 N** of hoop tension at 13 mm, for strut widths 0.2–0.4 mm. | **New constraint.** Compare with the rated knot-pull strength of the suture. |
+| 6 | Expansion comes from suture dissolution. | No-dissolution control (`k_diss` = 0): the diameter is constant to 5 decimal places for 12 months. | **Supported.** |
+
+## What this means for the PINNVALVE results
+
+**The method results stand.** The main PINNVALVE findings compare models trained on the same
+data. They are:
+
+- the physics loss does not reliably improve out-of-distribution diameter error
+- it recovers the never-supervised martensite fraction 60% better
+- it helps when data are scarce or noisy
+
+These findings are about whether a physics prior helps a network learn a given physical law. None of the COMSOL
+findings changes that comparison.
+
+**The device-level numbers are not validated, and two of them are contradicted.** The predicted
+trajectories describe an idealised scaffold that:
+
+- is held fully crimped at implant (finding 1)
+- recovers a 1.5–2.2× expansion without permanent set (finding 2)
+
+With the frame geometry estimated from the render and realistic sutures, COMSOL shows that
+neither holds. The PINNVALVE trajectories should therefore be presented as the behaviour of the
+modelled law, not as predictions for this device.
+
+**What the results still support.** COMSOL and the generator agree on the direction of every
+design effect:
+
+- more sutures hold the scaffold tighter and slow its expansion
+- faster dissolution opens it sooner
+- the austenite finish temperature (Af) is the material property that matters most
+- dissolution is the only driver of expansion
+
+Statements about how design choices rank against each other are on firmer ground than absolute
+diameters or times.
+
+## Suggested wording for the paper
+
+> The training data come from a reduced-order shape-memory model that maps material-level recovery
+> onto an assumed device-level diameter range. Finite-element simulations in COMSOL (an
+> axisymmetric nitinol ring and a diamond lattice cell with the estimated strut geometry) were used
+> to test its physical assumptions. They agreed with the generator on the direction of every design
+> effect, but showed that (i) realistic sutures cannot hold a solid ring crimped, and (ii) halving the
+> diameter of the estimated lattice produces 9.7–12.9% peak strut strain, above nitinol's 6–8%
+> recoverable range. PINNVALVE's conclusions concern how well a physics-informed network learns the
+> modelled law; its absolute diameter predictions should not be read as predictions for the physical
+> device until the generator is constrained by these limits.
+
+## Redesign: a frame that survives the 26 → 13 mm crimp
+
+Seven lattice geometries were crimped from 26 to 13 mm (`comsol_ring_report.md`, lattice section).
+Adding cells around the frame (18 or 24 instead of 12) or lengthening the struts to 8 mm lowered the
+peak strain to 8.4–10.4%. That is still above 6% at 13 mm. One design stays inside the recoverable range:
+
+| Design | Peak strain at 13 mm | Martensite at 13 mm | After release | Hoop tension per row at 13 mm |
+|---|---|---|---|---|
+| 12 cells, 10 mm × 0.25 mm struts | 5.0% (fine mesh), 5.2% (normal mesh), 5.05% (0.2 mm fillet) | 0.61 | returns to 26.00 mm, martensite 0 | 1.17 N |
+
+Where the peak sits: in the original design at 13 mm, the strain is 12.6% at 0.5–1 mm from the
+junction centre, where the strut meets the junction. It is 0.5% in the middle of the strut.
+
+Why strain does not fall in proportion to strut width: once the most-bent region transforms, it
+deforms at a nearly constant stress and the bending concentrates there. Peak strain then sits near the
+6% transformation cap plus elastic strain, whatever the width. The 10 mm design never fully transforms
+anywhere (martensite 0.61), so it stays below that regime.
+
+**Suture load for this design.** The 1.17 N is the hoop tension carried through any cross-section of
+the row at 13 mm. It falls to 0.76 N at 16 mm and 0.46 N at 19.5 mm as the frame opens.
+- **Sutures tied one after another around the row:** each suture is in series with the frame, so each
+  carries the full 1.17 N.
+- **n sutures side by side across the same gap:** they share it, about 1.17 / n N each.
+
+Forces scale with the assumed 0.4 mm strut thickness.
+
+## Limitations of the COMSOL results
+
+- **The working design trades away frame height and radial force.**
+  - Its cells are about 19 mm tall, so a 20–25 mm frame holds roughly one row of cells, compared with
+    about 2.5 rows in the rendered design.
+  - Its outward force at 13 mm is about 9 kPa equivalent pressure (1.17 N over a cell row), against
+    about 0.48 MPa for the original geometry, roughly 50 times lower.
+  - Whether that is enough to anchor and seal against the annulus was not evaluated.
+- **Fatigue under cardiac cycling is not modelled.** All simulations are a single, monotonic crimp and
+  release. An implanted frame sees tens of millions of pulsatile loading cycles per year. Nitinol fatigue
+  is governed by the alternating strain at the strut junctions, and none of these models computes it.
+  A design that passes the 6–8% recovery limit may still fail in fatigue.
+- **The lattice cell is idealised.** It is flat (curvature ignored) and plane stress, and its strut
+  dimensions are estimated from a render, not measured. The two-strut crowns at the frame ends are not
+  included. Plasticity is not modelled, so recovery after more than 6% strain is not reported.
+- **The ring model uses a smeared suture.** Sutures are a uniform radial spring, and their stiffness
+  decays exponentially with time. That decay law is assumed, not measured, and is the same form the
+  synthetic generator uses.
+
+## Ways to close the gap
+
+1. **Constrain the generator.**
+   - Cap the expansion ratio at the value the lattice can recover. The redesign runs in
+     `comsol_ring_report.md` give this per geometry.
+   - Let recovery at implant be greater than 0 when the sutures are compliant.
+   - Retrain and check whether the method conclusions still hold.
+2. **Change the frame design** so that a 2× expansion stays under 6–8% strain. The redesign runs
+   found one such design (12 cells, 10 mm struts, see above). Curved junctions were not tested.
+3. **Validate on COMSOL trajectories, not only synthetic ones,** once a feasible design exists.
+   `experiments/comsol_validation.py` takes the template-format CSVs in `data/comsol/`.
