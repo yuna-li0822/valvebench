@@ -28,6 +28,9 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
+# Bundled copies (data/cdc/, with SHA256s in its README.txt) are used first, so the
+# default synthetic generator works offline; the network is only a fallback.
+_BUNDLED_DIR = Path(__file__).resolve().parents[2] / "data" / "cdc"
 CDC_BASE_URL = "https://www.cdc.gov/growthcharts/data/zscore/"
 CDC_TABLES = {
     "stature_for_age": "statage.csv",
@@ -62,6 +65,9 @@ def download_cdc_table(table_name: str, force: bool = False) -> Tuple[Path, str]
     if table_name not in CDC_TABLES:
         raise KeyError(f"Unknown CDC table '{table_name}'. Available: {list(CDC_TABLES)}")
     filename = CDC_TABLES[table_name]
+    bundled = _BUNDLED_DIR / filename
+    if bundled.exists() and not force:
+        return bundled, _sha256_bytes(bundled.read_bytes())
     cache_dir = _cache_dir()
     path = cache_dir / filename
     sha_path = cache_dir / (filename + ".sha256")

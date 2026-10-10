@@ -132,6 +132,14 @@ def _tensors_from_df(df: pd.DataFrame):
     return theta_raw, t, d_true
 
 
+def _collocation_tensors(df: pd.DataFrame):
+    """Design vector + time only -- no diameter labels are read, so these
+    points can sit at times where nothing was measured."""
+    theta_raw = torch.tensor(df[THETA_COLUMNS].values, dtype=torch.float32)
+    t = torch.tensor(df[["t_months"]].values, dtype=torch.float32, requires_grad=True)
+    return theta_raw, _normalize_theta(theta_raw), t
+
+
 def _physics_terms(model, theta_raw, theta_norm, t):
     d_pred, sigma_pred, xi_pred = model(theta_norm, t)
     dDdt = torch.autograd.grad(
@@ -204,7 +212,17 @@ class TrainResult:
     history: list = field(default_factory=list)
 
 
-def train_scaffold_pinn(train_df: pd.DataFrame, config: TrainConfig = TrainConfig()) -> TrainResult:
+def train_scaffold_pinn(
+    train_df: pd.DataFrame,
+    config: TrainConfig = TrainConfig(),
+    collocation_df: Optional[pd.DataFrame] = None,
+) -> TrainResult:
+    """`collocation_df` (optional): unlabeled (design, time) points at which
+    the physics residuals are enforced INSTEAD of at the labeled `train_df`
+    rows -- e.g. all timepoints of the training designs when diameter was
+    only measured at a few of them. Only THETA_COLUMNS and t_months are read.
+    Default None keeps the original behavior (physics at the labeled rows).
+    """
     _require_torch()
     torch.manual_seed(config.seed)
 
@@ -214,10 +232,14 @@ def train_scaffold_pinn(train_df: pd.DataFrame, config: TrainConfig = TrainConfi
     model = ScaffoldPINN(hidden_dim=config.hidden_dim)
     optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
 
+    colloc = _collocation_tensors(collocation_df) if collocation_df is not None else None
+
     history = []
     for epoch in range(config.epochs):
         d_pred, kinetics_res, constitutive_res, mono_res, yield_res = _physics_terms(model, theta_raw, theta_norm, t)
         data_loss = torch.mean((d_pred - d_true) ** 2)
+        if colloc is not None:
+            _, kinetics_res, constitutive_res, mono_res, yield_res = _physics_terms(model, *colloc)
         physics_loss = (
             torch.mean(kinetics_res ** 2)
             + torch.mean((constitutive_res / smac.SIGMA_REF) ** 2)

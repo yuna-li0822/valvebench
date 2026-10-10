@@ -14,10 +14,8 @@ from valvebench.datasets.synthetic import (
 
 
 def _cdc_generate(**kwargs):
-    try:
-        return generate_synthetic(anthropometrics="cdc", **kwargs)
-    except OSError as exc:  # urllib.error.URLError subclasses OSError
-        pytest.skip(f"CDC tables unavailable: {exc}")
+    # CDC tables are bundled in data/cdc/, so no network is needed.
+    return generate_synthetic(anthropometrics="cdc", **kwargs)
 
 
 def test_phn_annulus_formula_matches_the_published_form():
@@ -30,7 +28,7 @@ def test_phn_annulus_formula_matches_the_published_form():
 
 def test_phn_requires_cdc_anthropometrics():
     with pytest.raises(ValueError):
-        generate_synthetic(N=5, annulus_source="phn")
+        generate_synthetic(N=5, anthropometrics="linear", annulus_source="phn")
 
 
 def test_unknown_options_rejected():
@@ -58,8 +56,15 @@ def test_literature_mode_is_deterministic_and_growth_is_realistic():
     assert 0.0 < growth.mean() < 2.0
 
 
-def test_default_generator_path_unchanged_by_the_new_options():
-    a = generate_synthetic(N=50, seed=5)
-    b = generate_synthetic(N=50, seed=5, anthropometrics="linear", annulus_source="legacy")
-    assert np.allclose(a["Valve_t12"].values, b["Valve_t12"].values)
-    assert np.allclose(a["Height_cm"].values, b["Height_cm"].values)
+def test_legacy_mode_still_reproduces_dataset_v0_1():
+    # Golden checksums recorded from the v0.1 generator before the default changed.
+    d = generate_synthetic(N=50, seed=5, anthropometrics="linear", annulus_source="legacy")
+    assert d["Valve_t12"].sum() == pytest.approx(1317.128551, abs=1e-4)
+    assert d["Height_cm"].sum() == pytest.approx(6673.547932, abs=1e-4)
+    assert d["BSA_m2"].sum() == pytest.approx(56.634593, abs=1e-4)
+
+
+def test_default_generator_is_the_literature_one():
+    default = generate_synthetic(N=40, seed=9)
+    explicit = generate_synthetic(N=40, seed=9, anthropometrics="cdc", annulus_source="phn")
+    assert np.allclose(default["Valve_t12"].values, explicit["Valve_t12"].values)

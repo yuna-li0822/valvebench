@@ -3,7 +3,7 @@ DEFAULT_SYNTHETIC_PARAMS = {
     "seed": 42,
 }
 
-DATASET_VERSION = "v0.1"
+DATASET_VERSION = "v0.2"  # v0.1 = legacy generator (anthropometrics="linear", annulus_source="legacy")
 
 DEFAULT_SPLIT_PARAMS = {
     "group_col": "Patient_ID",

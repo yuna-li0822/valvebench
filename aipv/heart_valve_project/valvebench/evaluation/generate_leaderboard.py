@@ -41,7 +41,7 @@ def generate_leaderboard(output_path: str | None = None, models=None, seeds=DEFA
         f"(n={len(seeds)}). Every cell is **mean ± standard deviation** across seeds, not a "
         "single split. 'ID' = held-out test split drawn from the same age range as training "
         "(`INTERIOR_AGE_RANGE_YRS`); 'OOD' = the excluded age extremes the model never trained "
-        "on (`valvebench.datasets.synthetic.generate_synthetic_id_ood_split`). Dataset version: v0.1.",
+        "on (`valvebench.datasets.synthetic.generate_synthetic_id_ood_split`). Dataset version: v0.2 (CDC anthropometrics + PHN annulus model; the legacy generator is v0.1).",
         "",
         "| model | ID RMSE | ID MAE | ID R² | OOD RMSE | OOD MAE | OOD R² |",
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",

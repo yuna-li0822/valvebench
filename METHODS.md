@@ -13,7 +13,9 @@ Defined in `valvebench/core/schema.py` and `valvebench/core/config.py`.
 
 ## Generator (`valvebench/datasets/synthetic.py`)
 
-**Patient growth**: `Valve_t0 = 6.0 + 14.0·sqrt(BSA) + N(0, 0.8)` (baseline diameter scales with body-surface area, the qualitative basis of real pediatric annulus Z-score methodology); `Valve_t12 = Valve_t0 + growth_rate(age, sex, bsa)·12 + N(0, 0.3)`, `growth_rate = (0.9·exp(-age/12) + 0.2) · sex_factor · log1p(bsa)`. `Height_cm`/`Weight_kg` are age-correlated (`Normal(75 + 6·age, 6)` / `Normal(10 + 2.5·age, 3)`, reusing the model already present in `heart_valve_project/legacy/utils/synthetic_dataset_generator.py`), not independent draws. **This was a real, audited bug** — see RESULTS.md §2 for the before/after correlations and R² numbers.
+**Patient growth (dataset v0.2, the default)**: each synthetic child gets a sex, an age (uniform over 1–16 y) and CDC height/weight z-scores (correlation 0.6, an assumption), converted to height and weight through the real CDC LMS tables (`valvebench/datasets/cdc_who.py`, tables bundled in `data/cdc/`; birth–36 month tables below 24 months). BSA is Mosteller. Annulus diameter is `D = (1.91 + z·0.24) cm × BSA^0.5` (Pediatric Heart Network, Lopez et al. 2017, Table 2), with an independent annulus z-score per child, and the child keeps the same z-scores 12 months later so `Valve_t12` comes from their grown BSA; measurement noise N(0, 0.3 mm). Sources and verification status: `CITATIONS.md`.
+
+**Patient growth (legacy, dataset v0.1)**: still available with `anthropometrics="linear", annulus_source="legacy"`, covered by a checksum regression test. `Valve_t0 = 6.0 + 14.0·sqrt(BSA) + N(0, 0.8)`; `Valve_t12 = Valve_t0 + growth_rate(age, sex, bsa)·12 + N(0, 0.3)` with `growth_rate = (0.9·exp(-age/12) + 0.2) · sex_factor · log1p(bsa)`; height/weight `Normal(75 + 6·age, 6)` / `Normal(10 + 2.5·age, 3)`. Its coefficients were illustrative, and it overstated annular growth (≈ 5.5 mm/yr vs ≈ 0.75 mm/yr from the literature model). The earlier audited bug about independent draws is in RESULTS.md §2; the move to v0.2 is RESULTS.md §2b.
 
 **Scaffold expansion**, two models, both genuine functions of `theta = (suture_count, material_stiffness, dissolution_rate, fold_angle)`:
 - `scaffold_diameter_at()` / `generate_scaffold_trajectories()`: single-compartment relaxation ODE (`valvebench/physics/sma.py`). Backs `SimValve_t0`/`SimValve_t12` and the `pinn` registry baseline.
@@ -22,7 +24,9 @@ Defined in `valvebench/core/schema.py` and `valvebench/core/config.py`.
 - `ood_shell_dataset()`: random designs outside the interior box, disjoint from `ood_corner_dataset_sma()`'s fixed 16 corners — used only for hyperparameter selection, never for final reporting (RESULTS.md §5).
 - `generate_synthetic_id_ood_split()`: the patient-growth task's age-extrapolation analog — train on `INTERIOR_AGE_RANGE_YRS` (3–13 yrs), test on the excluded extremes.
 
-Dataset version: `v0.1` (`DATASET_VERSION` in `valvebench/core/config.py`).
+Dataset version: `v0.2` (`DATASET_VERSION` in `valvebench/core/config.py`); `v0.1` is the legacy generator.
+
+**Material constants.** `valvebench/physics/sma_constitutive.py` reads its constants at call time. The defaults are round values inside published ranges; a literature preset (`LITERATURE_NITINOL`, Bernini et al. 2023 Table 6) can be swapped in with `material_constants(...)`, and `experiments/material_sensitivity.py` shows the main findings hold under it.
 
 ## Splits (`valvebench/datasets/splits.py`)
 

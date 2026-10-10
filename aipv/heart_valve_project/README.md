@@ -30,7 +30,7 @@ Mapped against the plan's own deliverable list, checked against the actual code 
 
 ## 1. What VALVEBENCH is
 
-A benchmark task (`valvebench.tasks.annular_growth_12mo`): predict a pediatric patient's 12-month pulmonary annulus diameter from four baseline anthropometric features (height, weight, BMI, BSA), on a frozen synthetic dataset (`v0.1`), with:
+A benchmark task (`valvebench.tasks.annular_growth_12mo`): predict a pediatric patient's 12-month pulmonary annulus diameter from four baseline anthropometric features (height, weight, BMI, BSA), on a frozen synthetic dataset (`v0.2`: CDC growth-chart anthropometrics plus a Pediatric Heart Network annulus model), with:
 
 - A leakage-safe, patient-level train/test split (`valvebench.datasets.splits.create_group_splits`).
 - An **in-distribution vs. out-of-distribution** evaluation: training data is drawn only from `INTERIOR_AGE_RANGE_YRS` (3–13 years); the OOD test set is drawn only from the excluded age extremes (infants under 3, adolescents over 13) — ages the model never saw. This tests extrapolation, not interpolation.
@@ -51,8 +51,8 @@ This is tested as an ablation: identical network architecture, identical data, i
 
 **Everything numeric in this repository's leaderboards and ablations is synthetic.** No real patient data, no real clinical measurements, no real nitinol test data are used anywhere. Two generators, both in `valvebench/datasets/synthetic.py`:
 
-- **Patient growth**: baseline annulus diameter scales with `sqrt(BSA)` (the same qualitative basis real pediatric echo Z-score methodology uses), and 12-month growth rate depends on age, sex, and BSA via an exponential-decay/log-BSA model. Height and weight are age-correlated (not independent draws — see §13 for why this was a real bug that got fixed). Coefficients are illustrative, not fit to a real published equation.
-- **Scaffold expansion**: driven by the actual Brinson/Auricchio-Sacco constitutive model (not a toy formula) — a constraint stress relaxes exponentially as sutures dissolve, and the martensite fraction follows real transformation kinetics as that stress crosses reverse-transformation thresholds. Material constants (elastic moduli, transformation stresses, max transformation strain) are representative literature values for superelastic nitinol, not calibrated against a measured sample.
+- **Patient growth (v0.2)**: *synthetic children sampled from real reference distributions.* Height and weight come from the CDC growth-chart LMS tables (bundled in `data/cdc/`); annulus diameter follows the Pediatric Heart Network model `D = (1.91 + z·0.24) cm × BSA^0.5` (Lopez et al. 2017, Table 2); each child keeps their percentiles for 12 months, so growth comes from body growth. The patients are still synthetic, and the model describes healthy children, not children with congenital heart disease. Sources, verification status and every assumption are in `CITATIONS.md`. The earlier hand-written generator (v0.1) is still available (`anthropometrics="linear", annulus_source="legacy"`) but overstated annular growth by roughly 7× (see §13).
+- **Scaffold expansion**: driven by the actual Brinson/Auricchio-Sacco constitutive model (not a toy formula) — a constraint stress relaxes exponentially as sutures dissolve, and the martensite fraction follows real transformation kinetics as that stress crosses reverse-transformation thresholds. Material constants (elastic moduli, transformation stresses, max transformation strain) default to round values inside published nitinol ranges, not calibrated against a measured sample; a second preset from a published nitinol parameter set (Bernini et al. 2023) is provided, and the main findings hold under it (§10b). The four design variables are design choices, not measured quantities.
 
 Full derivations and honesty caveats are in each generator function's docstring and in `valvebench/physics/sma_constitutive.py`.
 
@@ -95,30 +95,32 @@ For PINNVALVE specifically, there's a **third**, separate dataset (`ood_shell_da
 - No forward (austenite→martensite) transformation kinetics — only the reverse direction, matching the single crimped-to-relaxed loading path this project models.
 - No temperature dependence — isothermal.
 - No literal claim that material-level strain equals device-level diameter change: a real strut/lattice scaffold amplifies small material strains into large device deformations, which would require the actual strut geometry (out of scope). The generator maps a physically-derived *recovery fraction* onto a separately-modeled device-level diameter range instead — see `sma_constitutive.py`'s docstring.
-- Material constants are representative literature values, **not calibrated against a measured nitinol sample**.
-- No coupling to a real FEM/COMSOL simulation anywhere in this repository.
+- Material constants are round values inside published ranges (with a literature preset for sensitivity checks), **not calibrated against a measured nitinol sample**.
+- No coupling to a real FEM/COMSOL simulation. One real COMSOL run is used only as a qualitative shape check (§10b), and a parametric COMSOL sweep is in progress.
 
 ## 10. Major results (see RESULTS.md for the full accounting)
 
 **VALVEBENCH leaderboard** (5 seeds, mean ± SD; see `leaderboard.md` for the live version):
 
-| model | ID RMSE | ID R² | OOD RMSE | OOD R² |
-| --- | ---: | ---: | ---: | ---: |
-| linear | 0.82 ± 0.08 | 0.71 ± 0.08 | 0.93 ± 0.08 | 0.91 ± 0.02 |
-| ridge | 0.82 ± 0.08 | 0.71 ± 0.08 | 0.95 ± 0.09 | 0.90 ± 0.02 |
-| mlp | 0.82 ± 0.09 | 0.71 ± 0.08 | 0.90 ± 0.09 | 0.91 ± 0.02 |
-| gbm | 0.89 ± 0.09 | 0.66 ± 0.08 | 1.38 ± 0.21 | 0.80 ± 0.05 |
-| gbm_monotone | 0.88 ± 0.08 | 0.67 ± 0.07 | 1.32 ± 0.18 | 0.82 ± 0.04 |
-| pinn | 0.86 ± 0.09 | 0.69 ± 0.07 | 1.09 ± 0.08 | 0.87 ± 0.02 |
+| model | ID RMSE | ID MAE | ID R² | OOD RMSE | OOD MAE | OOD R² |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| linear | 2.65 ± 0.17 | 2.12 ± 0.17 | 0.42 ± 0.13 | 3.02 ± 0.27 | 2.33 ± 0.15 | 0.68 ± 0.05 |
+| ridge | 2.64 ± 0.17 | 2.12 ± 0.17 | 0.43 ± 0.12 | 2.90 ± 0.16 | 2.26 ± 0.09 | 0.71 ± 0.04 |
+| mlp | 2.66 ± 0.15 | 2.12 ± 0.17 | 0.41 ± 0.12 | 2.88 ± 0.11 | 2.23 ± 0.07 | 0.71 ± 0.04 |
+| gbm | 2.98 ± 0.28 | 2.36 ± 0.25 | 0.26 ± 0.20 | 3.04 ± 0.31 | 2.42 ± 0.24 | 0.68 ± 0.04 |
+| gbm_monotone | 2.76 ± 0.21 | 2.18 ± 0.21 | 0.36 ± 0.18 | 2.96 ± 0.31 | 2.35 ± 0.21 | 0.70 ± 0.04 |
+| pinn | 3.02 ± 0.32 | 2.38 ± 0.26 | 0.26 ± 0.08 | 3.23 ± 0.30 | 2.57 ± 0.20 | 0.64 ± 0.07 |
+
+The patient-growth numbers are dominated by real biological variation: children of the same size differ in annulus diameter by about ±2.4 mm, which no model can predict from height and weight (an estimator that knows true BSA has an irreducible RMSE of ≈ 2.4–2.5 mm; the best models are within ≈ 0.2 mm of it). `linear`/`ridge`/`mlp` are indistinguishable; `pinn` on this patient task is the weakest on OOD. The earlier v0.1 numbers (RMSE 0.82–1.38) came from a generator that made annulus size nearly deterministic, and are kept in RESULTS.md only for the record.
 
 **PINNVALVE ablation** (5 seeds, held-out ID test + untouched OOD test — see §13):
 
-| model | ID RMSE (mm) | OOD RMSE (mm) | OOD ξ RMSE |
-| --- | ---: | ---: | ---: |
-| physics_weight=0 | 0.212 ± 0.035 | 1.944 ± 0.098 | 0.519 ± 0.053 |
-| PINNVALVE | 0.223 ± 0.021 | 1.962 ± 0.067 | 0.206 ± 0.011 |
+| model | ID RMSE (mm) | ID MAE (mm) | OOD RMSE (mm) | OOD MAE (mm) | OOD ξ RMSE |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| physics_weight=0 | 0.212 ± 0.035 | 0.139 ± 0.013 | 1.944 ± 0.098 | 1.315 ± 0.065 | 0.519 ± 0.053 |
+| PINNVALVE | 0.223 ± 0.021 | 0.147 ± 0.007 | 1.962 ± 0.067 | 1.321 ± 0.069 | 0.206 ± 0.011 |
 
-- Diameter OOD RMSE: **−1.1% ± 4.2%** — not a reliable effect (1/5 seeds positive).
+- Diameter OOD RMSE: **−1.1% ± 4.2%** (MAE: **−0.5% ± 4.2%**) — not a reliable effect (1/5 seeds positive).
 - Martensite-fraction (never-supervised) OOD RMSE: **60% better**, robust across every `physics_weight` tested (0.1–20) and every seed.
 - The physics prior's benefit **is** real and substantial in two specific regimes: when training data is scarce (up to +24% OOD RMSE improvement at 6 training designs, fading to noise by ~24 designs) and when observations are noisy (5% improvement at low noise, **45% at high noise**, scaling monotonically) — see `experiments/figures/data_efficiency.png` and RESULTS.md.
 
@@ -136,6 +138,10 @@ py -3 aipv/heart_valve_project/valvebench/evaluation/generate_scaffold_leaderboa
 py -3 aipv/heart_valve_project/experiments/pinn_train.py                                # -> experiments/pinnvalve_ablation_report.md
 py -3 aipv/heart_valve_project/experiments/error_analysis.py                            # -> experiments/error_analysis_report.md
 py -3 aipv/heart_valve_project/experiments/generate_figures.py                          # -> experiments/figures/*.png
+py -3 aipv/heart_valve_project/experiments/generate_extra_figures.py                    # -> COMSOL shape check, results table, data overview, error-by-region
+py -3 aipv/heart_valve_project/experiments/material_sensitivity.py                      # -> experiments/material_sensitivity_report.md
+py -3 aipv/heart_valve_project/experiments/extrapolation_and_sparsity.py                # -> experiments/extrapolation_and_sparsity_report.md
+py -3 aipv/heart_valve_project/experiments/comsol_validation.py --comsol-csv <your export>  # compare a COMSOL export to both models
 
 # Tests
 py -3 -m pytest aipv/heart_valve_project/tests/
@@ -145,11 +151,11 @@ Every generator, split, and model accepts an explicit `seed`; the multi-seed har
 
 ## 12. Limitations (stated explicitly, not buried)
 
-- **All data are synthetic.** No claim is made about real pediatric or nitinol outcomes.
-- **VALVEBENCH is the synthetic-data-only benchmark.** The larger "open public benchmark" version of the original spec — MMWHS/ImageCHD/SegTHOR/NIH-3D ingestion actually populated with data, real CDC/WHO-derived training features, transcribed Pettersen/Zilberman tables, a live literature-regression baseline — is **not implemented**. Loaders/scaffolding exist (`valvebench/datasets/imaging/`, `valvebench/datasets/literature_tables.py`) but require data this environment doesn't have verified access to.
+- **All data are synthetic.** The patient data are sampled from real reference distributions (CDC charts, Pediatric Heart Network annulus model) but the children are simulated, and the model describes healthy children, not congenital heart disease patients. No claim is made about real pediatric or nitinol outcomes.
+- **VALVEBENCH is the synthetic-data-only benchmark.** The larger "open public benchmark" version of the original spec — MMWHS/ImageCHD/SegTHOR/NIH-3D ingestion actually populated with data, transcribed Pettersen/Zilberman tables, a live literature-regression baseline — is **not implemented** (CDC anthropometrics and the PHN annulus model are now used in the generator, but no real patient records are). Loaders/scaffolding exist (`valvebench/datasets/imaging/`, `valvebench/datasets/literature_tables.py`) but require data this environment doesn't have verified access to.
 - **PINNVALVE's headline diameter-accuracy claim did not survive a corrected evaluation methodology** (see §13) — this is reported as a negative result, not hidden.
 - **The physics model is a documented simplification** of a full thermomechanical SMA constitutive law (§9).
-- **No real FEM/COMSOL coupling anywhere.**
+- **No real FEM/COMSOL coupling.** Only a single COMSOL run (phase-fraction curve; no stress output; no scaffold design parameters) exists, used as a qualitative shape check, not a validation.
 - Sample sizes in the data-efficiency and noise-robustness experiments are modest (3 seeds per condition) — the trends are consistent and physically sensible, but individual percentages should be read as suggestive, not tightly bounded.
 
 ## 13. What changed on the second audit pass (read this if you're deciding whether to trust the numbers above)
@@ -163,22 +169,25 @@ Both were fixed: a genuinely held-out ID test split was added (`interior_train_v
 
 Separately, the same audit found the patient-growth generator's `Valve_t0` was drawn independently of every feature (correlation ≈ 0.02–0.07, noise-level), making roughly half the benchmark's two-column target unlearnable regardless of model capacity, and that `Height_cm`/`Weight_kg` were independent of `Age_yrs` (a synthetic "1-year-old" could be assigned a height of 180cm). Both were fixed (§4); the leaderboard's R² went from ≈0.01 (barely above predicting the mean) to ≈0.70 as a direct result. The same pass found `MLPRegressor` was being fed unscaled features and produced R² ≈ −7 (worse than predicting the mean) — a missing-preprocessing bug, not evidence MLPs are unsuited to this task; fixed by standardizing inputs and outputs, after which `mlp` performs on par with `linear`/`ridge`.
 
+**Third pass (literature-derived patient generator, dataset v0.2).** The patient side was moved from hand-written formulas to sampled real reference distributions (CDC growth charts, Pediatric Heart Network annulus model; sources and status in `CITATIONS.md`). That exposed that the v0.1 growth law overstated annular growth by roughly 7× (≈ 5.5 vs ≈ 0.75 mm/yr) and made annulus size nearly deterministic from BSA, which is why v0.1 errors were small. The PINNVALVE scaffold results do not use this generator and are unchanged. The scaffold constants were also checked against a published nitinol parameter set; the findings hold (§10b).
+
 Full details, every number before and after, and the reasoning behind each fix are in RESULTS.md and JOURNAL.md.
 
 ## 14. Future work
 
-- Real public-dataset ingestion for VALVEBENCH (the loaders exist; the data doesn't).
-- Transcribing real Pettersen/Zilberman tables and a verified Hoashi/Zhang formula.
+- **COMSOL sweep (in progress):** a parametric sweep over suture count, stiffness, dissolution rate and fold angle, exporting outer-boundary diameter, stress and phase fraction, to serve as a physical-simulation test set for both models (`experiments/comsol_validation.py` is ready for it).
+- Real public-dataset ingestion for VALVEBENCH (the loaders exist; the data doesn't), and real congenital-heart-disease annulus data in place of the healthy-children reference model.
+- Second-source check of the annulus model against Pettersen et al. 2008 (needs library access).
 - Forward transformation kinetics and temperature dependence in the SMA model.
 - A geometric (strut/lattice) model connecting material strain to device diameter, replacing the current recovery-fraction indirection.
 - Larger seed counts for the data-efficiency/noise-robustness sweeps.
-- Real FEM (COMSOL) coupling as a ground truth to train/validate the surrogate against, instead of a fully synthetic generator.
 
 ## Repository structure
 
-- `data/` — synthetic datasets; `data/literature/` (placeholder templates, see §12)
+- `CITATIONS.md` — every source, what it is used for, its verification status, and every modeling assumption
+- `data/` — legacy v0.1 CSV exports (`data/synthetic/`); `data/cdc/` (bundled CDC growth-chart tables + SHA256s); `data/comsol/` (COMSOL export template and the phase-fraction points); `data/literature/` (placeholder templates, see §12)
 - `valvebench/` — `datasets/` (synthetic + real-data loaders), `models/` (baselines + PINN models), `physics/`, `tasks/`, `evaluation/` (metrics + plots + both leaderboard generators), `baselines/` (thin re-exports of `models/`, kept for the file paths named in the project plan), `cli.py` (`valvebench run --all`)
-- `experiments/` — `pinn_train.py` (ablation), `error_analysis.py` (per-region failure breakdown), `generate_figures.py` (all figures), `figures/` (output PNGs)
+- `experiments/` — `pinn_train.py` (ablation), `error_analysis.py` (per-region failure breakdown), `generate_figures.py` and `generate_extra_figures.py` (all figures), `material_sensitivity.py`, `extrapolation_and_sparsity.py`, `comsol_validation.py`, `figures/` (output PNGs)
 - `scripts/` — `run_baseline.py`, `export_to_hf.py`
 - `tests/` — full pytest suite, including dedicated leakage-regression tests (`test_leakage.py`)
 - `leaderboard.md` — generated VALVEBENCH leaderboard (patient-growth task)

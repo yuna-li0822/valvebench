@@ -221,7 +221,7 @@ def _sample_age_yrs(rng, age_ranges):
     return float(rng.uniform(lo, hi))
 
 
-def generate_synthetic(N=100, seed=42, age_ranges=None, anthropometrics="linear", annulus_source="legacy"):
+def generate_synthetic(N=100, seed=42, age_ranges=None, anthropometrics="cdc", annulus_source="phn"):
     """`age_ranges`: optional list of (lo, hi) year tuples to draw
     `Age_yrs` from (defaults to a single range spanning `FULL_AGE_RANGE_YRS`).
     Used to build the age-OOD split: pass `[INTERIOR_AGE_RANGE_YRS]` for
@@ -305,11 +305,11 @@ def generate_synthetic(N=100, seed=42, age_ranges=None, anthropometrics="linear"
     return merged_df
 
 
-def generate_synthetic_dataset(n_samples: int = 100, seed: int = 42, age_ranges=None, anthropometrics="linear", annulus_source="legacy"):
+def generate_synthetic_dataset(n_samples: int = 100, seed: int = 42, age_ranges=None, anthropometrics="cdc", annulus_source="phn"):
     return generate_synthetic(N=n_samples, seed=seed, age_ranges=age_ranges, anthropometrics=anthropometrics, annulus_source=annulus_source)
 
 
-def generate_synthetic_id_ood_split(n_train: int = 200, n_ood: int = 80, seed: int = 42, anthropometrics="linear", annulus_source="legacy"):
+def generate_synthetic_id_ood_split(n_train: int = 200, n_ood: int = 80, seed: int = 42, anthropometrics="cdc", annulus_source="phn"):
     """The patient-growth task's age-extrapolation OOD split: in-distribution
     data drawn only from INTERIOR_AGE_RANGE_YRS, and an OOD set drawn only
     from the excluded complement of FULL_AGE_RANGE_YRS (infants younger
