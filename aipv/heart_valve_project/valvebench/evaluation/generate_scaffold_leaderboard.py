@@ -68,19 +68,24 @@ def generate_scaffold_leaderboard(output_path: str | None = None, seeds=DEFAULT_
         f"Config: physics_weight={config.physics_weight}, hidden_dim={config.hidden_dim}, "
         f"epochs={config.epochs}.",
         "",
-        "| model | ID RMSE (mm) | OOD RMSE (mm) | OOD ξ RMSE |",
-        "| --- | ---: | ---: | ---: |",
+        "| model | ID RMSE (mm) | OOD RMSE (mm) | OOD ξ RMSE | OOD ξ RMSE, ξ from D |",
+        "| --- | ---: | ---: | ---: | ---: |",
         f"| mlp_only (physics_weight=0) | {fmt(summary['mlp_only'].get('id_rmse'))} | "
-        f"{fmt(summary['mlp_only'].get('ood_rmse'))} | {fmt(summary['mlp_only'].get('ood_xi_rmse'))} |",
+        f"{fmt(summary['mlp_only'].get('ood_rmse'))} | {fmt(summary['mlp_only'].get('ood_xi_rmse'))} | "
+        f"{fmt(summary['mlp_only'].get('ood_xi_posthoc_rmse'))} |",
         f"| PINNVALVE | {fmt(summary['pinn'].get('id_rmse'))} | "
-        f"{fmt(summary['pinn'].get('ood_rmse'))} | {fmt(summary['pinn'].get('ood_xi_rmse'))} |",
+        f"{fmt(summary['pinn'].get('ood_rmse'))} | {fmt(summary['pinn'].get('ood_xi_rmse'))} | "
+        f"{fmt(summary['pinn'].get('ood_xi_posthoc_rmse'))} |",
         "",
         f"OOD diameter RMSE improvement: {summary['ood_improvement_pct']['mean']:.2f}% "
         f"± {summary['ood_improvement_pct']['std']:.2f}% "
         f"({summary['ood_improvement_pct']['n_positive']}/{summary['ood_improvement_pct']['n_seeds']} seeds positive) "
         "-- not a reliable effect at this weight; see RESULTS.md for the full accounting "
-        "of what does and doesn't hold up. The ξ RMSE column is the effect that does: ξ is "
-        "never directly supervised during training.",
+        "of what does and doesn't hold up. ξ is never supervised. 'OOD ξ RMSE' is each network's "
+        "own ξ output; mlp_only's is never trained, so it is not a fair baseline. 'ξ from D' passes "
+        "the predicted diameter through the physics equations after training "
+        "(`pinn_scaffold.xi_from_diameter`); for mlp_only this is the fair baseline, and against it "
+        "PINNVALVE's ξ is not better (RESULTS.md §5b).",
     ]
 
     output = Path(output_path or Path(__file__).resolve().parents[2] / "scaffold_leaderboard.md")

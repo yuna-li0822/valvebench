@@ -90,22 +90,26 @@ def pinnvalve_figures():
 
     print("PINNVALVE: physics_weight sweep (validation shell, 3 seeds per weight)...")
     weights = [0.1, 0.3, 1.0, 3.0, 10.0]
-    diam_mean, diam_std, xi_mlp_mean, xi_pinn_mean = [], [], [], []
+    diam_mean, diam_std, xi_mlp_mean, xi_pinn_mean, xi_post_mean = [], [], [], [], []
     for w in weights:
-        improvs, xi_mlp_vals, xi_pinn_vals = [], [], []
+        improvs, xi_mlp_vals, xi_pinn_vals, xi_post_vals = [], [], [], []
         for seed in (0, 1, 2):
             cfg = TrainConfig(epochs=600, hidden_dim=24, lr=8e-3, physics_weight=w, physics_ramp_epochs=150, seed=seed, log_every=0)
             result = run_ablation(train_df, val_df, shell_df, cfg)
             improvs.append(result["ood_improvement_pct"])
             xi_mlp_vals.append(result["mlp_only"]["ood_xi_rmse"])
             xi_pinn_vals.append(result["pinn"]["ood_xi_rmse"])
+            xi_post_vals.append(result["mlp_only"]["ood_xi_posthoc_rmse"])
         diam_mean.append(float(np.mean(improvs)))
         diam_std.append(float(np.std(improvs)))
         xi_mlp_mean.append(float(np.mean(xi_mlp_vals)))
         xi_pinn_mean.append(float(np.mean(xi_pinn_vals)))
-        print(f"  weight={w}: diam_improv={diam_mean[-1]:.2f}±{diam_std[-1]:.2f}%, xi_mlp={xi_mlp_mean[-1]:.3f}, xi_pinn={xi_pinn_mean[-1]:.3f}")
+        xi_post_mean.append(float(np.mean(xi_post_vals)))
+        print(f"  weight={w}: diam_improv={diam_mean[-1]:.2f}±{diam_std[-1]:.2f}%, xi_mlp={xi_mlp_mean[-1]:.3f}, "
+              f"xi_mlp_from_D={xi_post_mean[-1]:.3f}, xi_pinn={xi_pinn_mean[-1]:.3f}")
 
-    plots.plot_physics_weight_sweep(weights, diam_mean, diam_std, xi_mlp_mean, xi_pinn_mean, FIGURES_DIR / "physics_weight_sweep.png")
+    plots.plot_physics_weight_sweep(weights, diam_mean, diam_std, xi_mlp_mean, xi_pinn_mean, FIGURES_DIR / "physics_weight_sweep.png",
+                                    xi_mlp_posthoc_mean=xi_post_mean)
 
     print("PINNVALVE: training curves (physics-off vs physics-on)...")
     off_cfg = TrainConfig(epochs=800, hidden_dim=24, lr=8e-3, physics_weight=0.0, physics_ramp_epochs=200, seed=0, log_every=40)
@@ -118,46 +122,12 @@ def pinnvalve_figures():
     )
 
 
-def data_efficiency_figure():
-    try:
-        import torch  # noqa: F401
-    except Exception:
-        print("torch not installed - skipping data-efficiency figure.")
-        return
-
-    from valvebench.datasets.synthetic import interior_train_val_test_split_sma, ood_shell_dataset
-    from valvebench.models.pinn_scaffold import TrainConfig, run_ablation
-
-    print("PINNVALVE: data-efficiency sweep...")
-    train_full, val_df, test_df = interior_train_val_test_split_sma(n_samples=100, seed=2)
-    shell_df = ood_shell_dataset(n_samples=20, seed=999)
-    train_ids = sorted(train_full["sample_id"].unique())
-
-    design_counts = [6, 12, 24, 48, min(96, len(train_ids))]
-    mlp_ood, pinn_ood = [], []
-    for n in design_counts:
-        rng = np.random.RandomState(0)
-        subset_ids = set(rng.choice(train_ids, size=n, replace=False))
-        sub_train = train_full[train_full["sample_id"].isin(subset_ids)].reset_index(drop=True)
-        mlp_vals, pinn_vals = [], []
-        for seed in (0, 1, 2):
-            cfg = TrainConfig(epochs=600, hidden_dim=24, lr=8e-3, physics_weight=1.0, physics_ramp_epochs=150, seed=seed, log_every=0)
-            result = run_ablation(sub_train, test_df, shell_df, cfg)
-            mlp_vals.append(result["mlp_only"]["ood_rmse"])
-            pinn_vals.append(result["pinn"]["ood_rmse"])
-        mlp_ood.append(float(np.mean(mlp_vals)))
-        pinn_ood.append(float(np.mean(pinn_vals)))
-        print(f"  n_designs={n}: mlp_ood={mlp_ood[-1]:.3f}, pinn_ood={pinn_ood[-1]:.3f}")
-
-    plots.plot_data_efficiency(design_counts, mlp_ood, pinn_ood, FIGURES_DIR / "data_efficiency.png")
-
-
 def main():
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     patient_growth_figures()
     leaderboard_id_vs_ood_figure()
     pinnvalve_figures()
-    data_efficiency_figure()
+    # data_efficiency.png is written by experiments/robustness_experiments.py
     print(f"\nAll figures written to {FIGURES_DIR}")
 
 

@@ -80,10 +80,12 @@ def test_ablation_xi_recovery_is_robust_but_diameter_improvement_is_not_claimed(
     test set (ood_corner_dataset_sma) -- see TrainConfig's docstring for why
     that separation matters and what happened before it existed.
 
-    1. Martensite fraction xi (never directly supervised): physics-on
-       recovers it far better than physics-off, which stays near chance.
-       This held at every physics_weight tested during development
-       (0.1-20) and is the robust half of this claim -- asserted here.
+    1. Martensite fraction xi (never directly supervised): physics-on's xi
+       output is far better than physics-off's own xi output, which is never
+       trained and stays near chance. This checks that the physics residuals
+       train the xi head; it is not the fair comparison (that is
+       test_posthoc_xi_from_noise_free_diameter_recovers_generator_xi and
+       experiments/xi_posthoc_synthetic.py).
     2. Diameter OOD RMSE improvement was found to be noise-level once
        hyperparameter tuning stopped leaking into the reported test set
        (see RESULTS.md) -- NOT asserted here, deliberately, because it

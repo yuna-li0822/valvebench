@@ -42,7 +42,7 @@ Legend: **VERIFIED** = title, journal and year confirmed against a publisher, Pu
 
 **Scaffold side:**
 - Constitutive equations: Brinson and Auricchio-Sacco (#3, #4).
-- Material constants: the defaults are round values that fall in the published ranges (E_A 60 GPa is inside 26–68 GPa; ε_L 6% matches) but are not from one source; E_M 25 GPa and the 100/40 MPa transformation stresses differ from the Bernini values (20 GPa, 150/115 MPa). A literature preset (#5, #6) exists, and `experiments/material_sensitivity_report.md` shows the main findings hold under it (ξ recovery 53–60% lower error with physics; no reliable diameter effect either way).
+- Material constants: the defaults are round values that fall in the published ranges (E_A 60 GPa is inside 26–68 GPa; ε_L 6% matches) but are not from one source; E_M 25 GPa and the 100/40 MPa transformation stresses differ from the Bernini values (20 GPa, 150/115 MPa). A literature preset (#5, #6) exists, and `experiments/material_sensitivity_report.md` shows the main findings hold under it (no reliable diameter effect either way; no ξ gain over the fair post-hoc baseline, RESULTS.md §5b).
 - Design variables (suture count, stiffness multiplier, dissolution rate, fold angle) are design choices, not measured quantities. Their ranges are not literature-derived. The mapping from material strain to device diameter is a modeling simplification (see `sma_constitutive.py`).
 
 ## Assumptions (not from any source)

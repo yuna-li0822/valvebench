@@ -15,10 +15,14 @@ experiment needed it).
 - Seeds: [0, 1, 2, 3, 4]
 - Config: epochs=1200, hidden_dim=24, physics_weight=1.0, physics_ramp_epochs=300
 
-| model | ID RMSE (mm) | OOD RMSE (mm) | OOD xi RMSE |
-| --- | ---: | ---: | ---: |
-| mlp_only (physics_weight=0) | 0.2119 ± 0.0347 | 1.9439 ± 0.0978 | 0.5185 ± 0.0534 |
-| PINNVALVE | 0.2235 ± 0.0207 | 1.9623 ± 0.0665 | 0.2060 ± 0.0105 |
+OOD xi RMSE = the network's own xi output. xi from D = xi computed after training from the
+predicted diameter with the physics equations (`xi_from_diameter`); for mlp_only this is the
+fair baseline, because its own xi output never receives a gradient.
+
+| model | ID RMSE (mm) | OOD RMSE (mm) | OOD xi RMSE | OOD xi RMSE, xi from D |
+| --- | ---: | ---: | ---: | ---: |
+| mlp_only (physics_weight=0) | 0.2119 ± 0.0347 | 1.9439 ± 0.0978 | 0.5185 ± 0.0534 | 0.1705 ± 0.0336 |
+| PINNVALVE | 0.2235 ± 0.0207 | 1.9623 ± 0.0665 | 0.2060 ± 0.0105 | 0.2029 ± 0.0176 |
 
 OOD diameter RMSE improvement: **-1.11% ± 4.15%** (1/5 seeds positive)
 
@@ -32,14 +36,13 @@ same OOD test set, which is a hyperparameter-tuning-on-the-test-set bug. Once
 physics_weight was re-tuned against a separate validation OOD set (never used
 here), the diameter effect did not survive.
 
-The martensite-fraction (xi) recovery effect DID survive: xi is never directly
-supervised during training (only diameter is), yet the physics-on model
-recovers it far more accurately than the physics-off model, consistently
-across every seed and every physics_weight tried during development (0.1 to
-20). This is the honest, defensible PINNVALVE result -- physics residuals let
-the network infer physically consistent latent state it was never shown, even
-though they don't reliably improve the directly-supervised quantity's
-out-of-distribution accuracy in this setup.
+The martensite-fraction (xi) comparison needs care. xi is never supervised.
+Physics-on's xi is far better than physics-off's own xi output, but that
+output never receives a gradient, so it is not a fair baseline. The fair
+baseline passes physics-off's predicted diameter through the same physics
+equations after training (last column); against it, physics-on is not
+better on this data. See RESULTS.md section 5b for the noise and
+sparse-label conditions.
 
 This is a controlled synthetic benchmark: the physics residual's functional
 form (valvebench/physics/sma_constitutive.py) matches the generator used to

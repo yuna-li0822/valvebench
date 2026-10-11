@@ -37,7 +37,7 @@ from valvebench.datasets.synthetic import (  # noqa: E402
     ood_corner_dataset_sma,
 )
 from valvebench.evaluation.plots import _require_mpl, plt  # noqa: E402
-from valvebench.models.pinn_scaffold import TrainConfig, predict, predict_latent, train_scaffold_pinn  # noqa: E402
+from valvebench.models.pinn_scaffold import TrainConfig, predict, predict_latent, train_scaffold_pinn, xi_from_diameter  # noqa: E402
 from valvebench.physics import sma_constitutive as smac  # noqa: E402
 
 FIGURES_DIR = _PROJECT_DIR / "experiments" / "figures"
@@ -129,7 +129,7 @@ def _parse_leaderboard():
 
 
 def _run_ablation_metrics(train_df, id_df, ood_df):
-    out = {k: {m: [] for m in ("id_rmse", "id_mae", "ood_rmse", "ood_mae", "ood_xi_rmse")} for k in ("mlp_only", "pinn")}
+    out = {k: {m: [] for m in ("id_rmse", "id_mae", "ood_rmse", "ood_mae", "ood_xi_rmse", "ood_xi_post")} for k in ("mlp_only", "pinn")}
     for seed in SEEDS:
         for key, weight in (("mlp_only", 0.0), ("pinn", TrainConfig().physics_weight)):
             model = train_scaffold_pinn(train_df, TrainConfig(physics_weight=weight, seed=seed)).model
@@ -137,8 +137,10 @@ def _run_ablation_metrics(train_df, id_df, ood_df):
                 err = predict(model, df) - df["Diameter_mm"].values
                 out[key][f"{split}_rmse"].append(float(np.sqrt(np.mean(err ** 2))))
                 out[key][f"{split}_mae"].append(float(np.mean(np.abs(err))))
-            _, _, xi = predict_latent(model, ood_df)
+            d, _, xi = predict_latent(model, ood_df)
             out[key]["ood_xi_rmse"].append(float(np.sqrt(np.mean((xi - ood_df["Xi"].values) ** 2))))
+            post = xi_from_diameter(d, ood_df)
+            out[key]["ood_xi_post"].append(float(np.sqrt(np.mean((post - ood_df["Xi"].values) ** 2))))
     return out
 
 
@@ -154,13 +156,16 @@ def results_table_figure(train_df, id_df, ood_df):
     imp = 100.0 * (np.array(ab["mlp_only"]["ood_mae"]) - np.array(ab["pinn"]["ood_mae"])) / np.array(ab["mlp_only"]["ood_mae"])
 
     lb_header = ["model", "ID RMSE", "ID MAE", "ID R²", "OOD RMSE", "OOD MAE", "OOD R²"]
-    ab_header = ["model", "ID RMSE (mm)", "ID MAE (mm)", "OOD RMSE (mm)", "OOD MAE (mm)", "OOD ξ RMSE"]
+    ab_header = ["model", "ID RMSE (mm)", "ID MAE (mm)", "OOD RMSE (mm)", "OOD MAE (mm)", "OOD ξ RMSE", "ξ from D"]
     ab_rows = [
-        [label] + [_ms(ab[key][m], d) for m, d in (("id_rmse", 3), ("id_mae", 3), ("ood_rmse", 3), ("ood_mae", 3), ("ood_xi_rmse", 3))]
+        [label] + [_ms(ab[key][m], d) for m, d in (("id_rmse", 3), ("id_mae", 3), ("ood_rmse", 3), ("ood_mae", 3),
+                                                    ("ood_xi_rmse", 3), ("ood_xi_post", 3))]
         for key, label in (("mlp_only", "physics_weight=0 (mlp_only)"), ("pinn", "PINNVALVE"))
     ]
     note = (f"OOD diameter MAE change: {imp.mean():+.1f}% ± {imp.std():.1f}% ({int((imp > 0).sum())}/{len(imp)} seeds positive) "
-            f"— not a reliable effect. ξ (never supervised) OOD RMSE: {100 * (1 - np.mean(ab['pinn']['ood_xi_rmse']) / np.mean(ab['mlp_only']['ood_xi_rmse'])):.0f}% lower with physics.")
+            f"— not a reliable effect. ξ (never supervised) OOD RMSE: PINNVALVE {np.mean(ab['pinn']['ood_xi_rmse']):.3f} vs "
+            f"{np.mean(ab['mlp_only']['ood_xi_post']):.3f} for physics_weight=0's diameter through the same equations "
+            f"(fair baseline; its own untrained ξ output: {np.mean(ab['mlp_only']['ood_xi_rmse']):.3f}).")
 
     fig, axes = plt.subplots(2, 1, figsize=(11, 6.2), gridspec_kw={"height_ratios": [6, 2.6]})
     for ax, header, rows, title in (

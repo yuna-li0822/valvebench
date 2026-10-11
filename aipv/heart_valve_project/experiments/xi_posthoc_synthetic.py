@@ -66,7 +66,7 @@ def run(train_df, id_df, ood_df, seeds, collocation_df=None):
 
 def _ms(runs, model, split, metric):
     v = np.array([r[model][split][metric] for r in runs])
-    return f"{v.mean():.3f} ± {v.std(ddof=1):.3f}"
+    return f"{v.mean():.3f} ± {v.std():.3f}"  # population SD, as in the other synthetic tables
 
 
 def main():

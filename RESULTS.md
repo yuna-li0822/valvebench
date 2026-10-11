@@ -76,10 +76,10 @@ Once the generator fix gave the benchmark real signal, `mlp` scored **R² ≈ �
 | --- | ---: | ---: | ---: |
 | mlp_only (physics_weight=0) | 0.212 ± 0.035 | 1.944 ± 0.098 | 0.519 ± 0.053 |
 | PINNVALVE | 0.223 ± 0.021 | 1.962 ± 0.067 | 0.206 ± 0.011 |
-| mlp_only diameter + closure ξ (post hoc) | — | — | **0.171 ± 0.038** |
+| mlp_only diameter + closure ξ (post hoc) | — | — | **0.171 ± 0.034** |
 
 - **OOD diameter RMSE improvement: −1.1% ± 4.2%** (1/5 seeds positive). Not a reliable effect.
-- **OOD martensite-fraction (ξ): no gain over a fair baseline.** Against the data-only network's own ξ output, physics looks 60% better (0.519 → 0.206). But that output never receives a gradient, so 0.519 is an untrained head. The fair baseline passes the data-only network's predicted diameter through the physics loss's own equations after training (`pinn_scaffold.xi_from_diameter`), and it scores 0.171 ± 0.038, slightly *better* than PINNVALVE. See §5b.
+- **OOD martensite-fraction (ξ): no gain over a fair baseline.** Against the data-only network's own ξ output, physics looks 60% better (0.519 → 0.206). But that output never receives a gradient, so 0.519 is an untrained head. The fair baseline passes the data-only network's predicted diameter through the physics loss's own equations after training (`pinn_scaffold.xi_from_diameter`), and it scores 0.171 ± 0.034, slightly *better* than PINNVALVE. See §5b.
 
 ## 5b. Post-hoc ξ baseline: what the ξ result actually measures
 
@@ -87,13 +87,13 @@ Once the generator fix gave the benchmark real signal, `mlp` scored **R² ≈ �
 
 | condition | data-only head (untrained) | data-only + closure | PINNVALVE | data-only OOD D (mm) | PINNVALVE OOD D (mm) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| clean (main ablation, 5 seeds) | 0.519 | **0.171 ± 0.038** | 0.206 ± 0.012 | 1.94 | 1.96 |
-| training noise 0.3 | 0.556 | 0.194 ± 0.042 | 0.202 ± 0.014 | 2.01 | 1.99 |
-| training noise 1.0 | 0.527 | 0.285 ± 0.007 | **0.200 ± 0.006** | 2.78 | 1.94 |
-| labels at t = 0, 6, 12 | 0.553 | **0.138 ± 0.028** | 0.189 ± 0.010 | 1.62 | 1.75 |
-| labels at t = 0, 12 | 0.521 | 0.215 ± 0.019 | 0.298 ± 0.028 (0.195 through the closure) | 2.00 | 1.80 |
+| clean (main ablation, 5 seeds) | 0.519 | **0.171 ± 0.034** | 0.206 ± 0.011 | 1.94 | 1.96 |
+| training noise 0.3 | 0.556 | 0.194 ± 0.035 | 0.202 ± 0.012 | 2.01 | 1.99 |
+| training noise 1.0 | 0.527 | 0.285 ± 0.005 | **0.200 ± 0.005** | 2.78 | 1.94 |
+| labels at t = 0, 6, 12 | 0.553 | **0.138 ± 0.023** | 0.189 ± 0.008 | 1.62 | 1.75 |
+| labels at t = 0, 12 | 0.521 | 0.215 ± 0.015 | 0.298 ± 0.023 (0.195 through the closure) | 2.00 | 1.80 |
 
-(3 seeds per condition except clean.) **The synthetic "60% better ξ" result does not survive a fair baseline.** PINNVALVE's ξ is better only under heavy noise (3/3 seeds), the same condition where its diameter is better, so the gain comes from a better diameter, not from separate access to the hidden state. The two other synthetic ξ claims fail the same check (`experiments/extrapolation_and_sparsity_report.md`, `experiments/material_sensitivity_report.md`, 5 seeds each):
+(3 seeds per condition except clean; ± is the population SD across seeds, as in the other synthetic tables. The COMSOL tables use the sample SD.) **The synthetic "60% better ξ" result does not survive a fair baseline.** PINNVALVE's ξ is better only under heavy noise (3/3 seeds), the same condition where its diameter is better, so the gain comes from a better diameter, not from separate access to the hidden state. The two other synthetic ξ claims fail the same check (`experiments/extrapolation_and_sparsity_report.md`, `experiments/material_sensitivity_report.md`, 5 seeds each):
 
 - **Far extrapolation** (design ranges widened 25%): "44% lower" against the untrained head; against the fair baseline PINNVALVE is 43% *worse* (0.289 vs 0.202, 0/5 seeds better).
 - **Literature nitinol constants:** "53% lower" against the untrained head; against the fair baseline 14% worse (0.235 vs 0.206, 2/5 seeds better).
@@ -107,43 +107,49 @@ An earlier version of this project reported "~13% OOD RMSE improvement, robust a
 
 **Fix**: `valvebench.datasets.synthetic.interior_train_val_test_split_sma` splits interior-box designs by `sample_id` into train/val/test (grouped, so all 5 timepoints of a design stay together); `ood_shell_dataset` provides a validation OOD set (random samples outside the training box) strictly disjoint from the final `ood_corner_dataset_sma` test set. `physics_weight` was re-swept using *only* train/val/shell:
 
-| physics_weight | OOD diameter improvement (validation shell, 7 seeds) |
-| ---: | --- |
-| 0.2 | mean −1.7%, 3/7 positive |
-| 0.3 | mean −0.8%, 4/7 positive |
-| 1.0 | (selected: modest, positive median, preserves full ξ benefit) |
-| 3.0 | mean +0.9% ± 7.5% (1 run) |
-| 10.0 (previous default) | mean −17.2% ± 11.1% — actively harmful once evaluated honestly |
+| physics_weight | OOD diameter RMSE change (validation shell) | PINNVALVE ξ | data-only D → ξ (fair) |
+| ---: | ---: | ---: | ---: |
+| 0.1 | +3.7% ± 2.9% | 0.114 | 0.121 |
+| 0.3 | +6.6% ± 1.7% | 0.109 | 0.121 |
+| 1.0 (selected) | +8.1% ± 3.3% | 0.110 | 0.121 |
+| 3.0 | +0.9% ± 7.5% | 0.143 | 0.121 |
+| 10.0 (previous default) | −17.2% ± 11.1% | 0.192 | 0.121 |
 
-The diameter effect **did not survive** at any weight tested. The ξ-recovery effect (mlp_only ξ RMSE ≈ 0.55 vs. physics-on ≈ 0.11–0.19) appeared at every weight, but it is measured against an untrained ξ head; against a fair post-hoc baseline it does not hold (§5b). `TrainConfig`'s default was changed from `physics_weight=10.0` to `physics_weight=1.0` as a result — see that dataclass's docstring in `valvebench/models/pinn_scaffold.py` for the full sweep.
+This is the reproducible sweep in `experiments/generate_figures.py` (`physics_weight_sweep.png`): 3 seeds per weight, scored on the validation shell (`ood_shell_dataset`), with a smaller configuration than the main ablation (80 designs, 600 epochs, learning rate 8×10⁻³). An earlier 7-seed development sweep (0.2: −1.7%, 0.3: −0.8%) is not reproducible from a script in the repo and is no longer cited.
+
+**The validation-shell gain does not carry over to the test set.** At the selected weight the shell shows +8.1%, but on the untouched OOD corners with the full configuration the change is −1.1% ± 4.2% (§4). Weight 10 is clearly harmful.
+
+The ξ-recovery effect (mlp_only's own ξ RMSE ≈ 0.55 vs. physics-on ≈ 0.11–0.19) appears at every weight, but it is measured against an untrained ξ head; the fair baseline (0.121) matches physics-on at weights 0.1–1 and beats it at 3 and 10 (§5b). `TrainConfig`'s default was changed from `physics_weight=10.0` to `physics_weight=1.0` as a result — see that dataclass's docstring in `valvebench/models/pinn_scaffold.py` for the full sweep.
 
 **The honest conclusion**: this project's original PINN-beats-MLP-on-OOD-diameter headline does not hold up. On synthetic data, neither does the latent-state result once the baseline is fair (§5b): physics helps only where it also improves diameter (heavy noise, scarcity). See `experiments/figures/physics_weight_sweep.png`.
 
-## 6. Where the physics prior *does* reliably help: data scarcity and noise
+## 6. Where the physics prior helps: heavy noise and very scarce data
 
 Two follow-up experiments, run after the corrected ablation, asking a more specific question than "does physics help on average" — "does it help more in a specific regime?"
 
-**Data efficiency** (`experiments/figures/data_efficiency.png`, 3 seeds per point, fixed held-out ID/OOD test sets, varying only the number of training scaffold designs):
+Both experiments are in `experiments/robustness_experiments.py` (`experiments/robustness_report.md`, `figures/data_efficiency.png`): main-ablation TrainConfig, 3 seeds per point, scored on the untouched test corners at baseline noise. They replace earlier numbers that could not be reproduced: the noise table had no script in the repo, and the data-efficiency figure was scored on the validation shell used to choose `physics_weight`, with a smaller configuration. The earlier figures (+24.1% at 6 designs, +45.5% at 1.0 mm noise) are withdrawn.
 
-| training designs | mlp_only OOD RMSE | PINNVALVE OOD RMSE | improvement |
-| ---: | ---: | ---: | ---: |
-| 6 | 1.92 | 1.71 | +24.1% |
-| 12 | 1.32 | 1.37 | −4.2% |
-| 24 | 1.37 | 1.33 | +2.4% |
-| 48 | 1.27 | 1.21 | +4.5% |
-| 96 | 1.17 | 1.15 | +1.5% |
+**Data scarcity** (varying only the number of training designs):
 
-**Noise robustness** (fixed val/test/shell sets at baseline noise; varying only training-data observation noise, 3 seeds per point):
+| training designs | data-only OOD RMSE (mm) | PINNVALVE OOD RMSE (mm) | gain | seeds positive |
+| ---: | ---: | ---: | ---: | ---: |
+| 6 | 2.366 | 2.086 | +10.4% ± 10.3% | 3/3 |
+| 12 | 2.137 | 1.969 | +7.9% ± 4.8% | 3/3 |
+| 24 | 1.780 | 1.778 | −0.1% ± 2.9% | 2/3 |
+| 48 | 1.890 | 1.845 | +2.3% ± 3.2% | 2/3 |
+| 72 (all) | 2.001 | 1.989 | +0.5% ± 4.5% | 1/3 |
 
-| noise_scale | mlp_only OOD RMSE | PINNVALVE OOD RMSE | improvement |
-| ---: | ---: | ---: | ---: |
-| 0.05 | 1.226 | 1.163 | +5.2% |
-| 0.10 | 1.240 | 1.164 | +6.1% |
-| 0.30 | 1.324 | 1.167 | +11.8% |
-| 0.60 | 1.602 | 1.229 | +23.3% |
-| 1.00 | 2.312 | 1.259 | +45.5% |
+**Training-data noise** (same designs; only the training-label noise changes):
 
-**This is the more coherent and more interesting finding than the flat "OOD improvement" claim**: the physics prior acts as a regularizer that resists being pulled around by noisy or scarce data. As training data gets noisier, the physics-constrained model degrades far more slowly than the data-only model (whose error more than doubles over the noise range tested, vs. PINNVALVE's much flatter curve). The data-efficiency trend is directionally consistent (large benefit at 6 designs, fading toward zero by ~24+) but noisier than the noise-robustness trend, and both are based on only 3 seeds per condition — read individual percentages as suggestive, not tightly bounded, but the monotonic pattern across 5 well-separated noise levels is a much stronger signal than a coin flip.
+| noise_scale (mm) | data-only OOD RMSE (mm) | PINNVALVE OOD RMSE (mm) | gain | seeds positive |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.05 | 1.968 | 1.988 | −1.1% ± 3.8% | 1/3 |
+| 0.1 | 2.001 | 1.989 | +0.5% ± 4.5% | 1/3 |
+| 0.3 | 2.011 | 1.988 | +1.1% ± 1.6% | 2/3 |
+| 0.6 | 2.133 | 1.962 | +7.5% ± 6.8% | 2/3 |
+| 1.0 | 2.780 | 1.943 | **+30.0% ± 4.3%** | 3/3 |
+
+**What holds:** the physics prior keeps OOD error flat as training noise grows (1.99 → 1.94 mm), while the data-only network's error rises 41% (1.97 → 2.78 mm). That gives a clear gain at heavy noise (+30%, 3/3 seeds) and none at low noise. With very few designs (6–12) it helps by 8–10% in every seed; from 24 designs up there is no gain. These are smaller effects than previously reported, from 3 seeds per point.
 
 **Caveat stated plainly**: this is a controlled synthetic benchmark where the physics residual's functional form matches the generator used to label the data by construction (see `valvebench/physics/sma_constitutive.py`'s docstring). It demonstrates that a *correct* physics prior helps most exactly where classical statistics says a prior should help most (small n, high noise) — a coherent and expected result, not a claim of calibration against real nitinol or tissue behavior.
 
@@ -165,7 +171,7 @@ Numbers match §4 exactly (same underlying code path), confirming the leaderboar
 1. **Both models fail hardest on the exact same three designs** — the corners with `Suture_Count=4, Material_Stiffness=0.5` (least mechanical constraint at crimping, the most extreme low-constraint corner in the design space). This is the design-space region furthest from "typical" behavior, and neither model handles it well.
 2. **PINNVALVE is not more accurate in any specific parameter region** at this seed — mlp_only has lower MAE in 7 of 8 low/high region splits (Suture_Count, Material_Stiffness, Dissolution_Rate both sides, Fold_Angle low side); PINNVALVE is only better on the Fold_Angle-high split (+4.7%). This is consistent with, and a finer-grained confirmation of, §5's finding that the diameter-accuracy improvement doesn't hold up — it's not that PINNVALVE wins in some regions and loses in others that average out to zero; it's that mlp_only is slightly ahead almost everywhere at this seed.
 
-This reinforces §5's honest conclusion rather than complicating it: the physics prior's value in this project is latent-state recovery and robustness under scarcity/noise (§6), not region-specific or aggregate diameter accuracy.
+This reinforces §5's honest conclusion rather than complicating it: the physics prior's value in this project is robustness under scarcity/noise (§6) and, on COMSOL data only, latent-state recovery on out-of-distribution designs (§7c); not region-specific or aggregate diameter accuracy. (On synthetic data the latent-state advantage does not survive a fair baseline, §5b.)
 
 ## 7c. PINNVALVE on COMSOL finite-element data: the non-circular test
 
@@ -251,6 +257,12 @@ From `experiments/comsol_ring_report.md` and `experiments/comsol_vs_synthetic.md
 - The sutures are tied one after another around the middle row, so each suture carries the row's full hoop
   tension. For the proposed designs at 13 mm, that is 1.17 N (10 mm struts) and 17.7 N (taper).
 - **Realistic sutures can hold the proposed lattice designs.** The 1000× suture stiffness in the ring model is a property of the solid-band stand-in, not of the device. With realistic sutures (0.3 mm, 1 GPa, 5 mm) tied one after another around the middle row, the frame's release force curve (lattice-cell model) and the sutures' series stiffness give these holding diameters: 10 mm design: held at 13.3 mm (98% of the crimp held, 1.1 N per suture, 12 sutures); taper: held at 15.5 mm (81% held, 9.1 N per suture), or 14.0 mm with 6 double-stranded sutures (14.3 N each). The 1000× ring holds 82% of its crimp at implant, the same regime. In series, more sutures make the hold softer, because their stretches add; doubling strands or using a thicker suture makes it stiffer. Reference strength: USP minimum knot-pull 2.68 kgf (about 26 N) for size 2-0 synthetic absorbable sutures.
+- **Sutures break; they do not soften.** A suture holds until rated strength × retention falls below its
+  load, then breaks, and in series the first break releases the row (`experiments/suture_release_time_report.md`).
+  With USP 2-0 minimum strength (26.3 N per strand) and PDS II retention, predicted release is 25–34 weeks
+  for the 10 mm design (1.1 N, around complete absorption), 12–14 weeks for the taper with 12 sutures (9.1 N),
+  and 15–17 weeks with 6 double-stranded sutures (14.3 N). The smooth exponential decay in both the synthetic
+  generator and the COMSOL model does not capture this step release.
 - Not modelled: fatigue under cardiac cycling.
 
 ## 8. Figures

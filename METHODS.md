@@ -73,7 +73,7 @@ loss = data_MSE(D) + ramp(epoch) * physics_weight * (
 - `monotonicity_residual` / `yield_violation` (`valvebench/physics/suture.py`): still need `dD/dt` via `torch.autograd.grad`.
 - `epsilon` is derived algebraically from the network's own `D` output (not a separate output head), via the same `D ↔ epsilon` mapping the generator uses.
 
-**`TrainConfig` defaults** (`epochs=1200, hidden_dim=24, lr=8e-3, physics_weight=1.0, physics_ramp_epochs=300`): re-tuned after a methodology fix (RESULTS.md §5). `physics_weight` was swept 0.1–20 using *only* `ood_shell_dataset` (a validation set disjoint from the final `ood_corner_dataset_sma` test set) — the diameter-OOD effect was noise-level at every weight; `physics_weight=1.0` was chosen as a modest value that preserves the full, robust martensite-fraction recovery benefit without the unjustified in-distribution cost of the previous (leaked-tuning) default of 10.0.
+**`TrainConfig` defaults** (`epochs=1200, hidden_dim=24, lr=8e-3, physics_weight=1.0, physics_ramp_epochs=300`): re-tuned after a methodology fix (RESULTS.md §5). `physics_weight` was swept 0.1–10 using *only* `ood_shell_dataset` (a validation set disjoint from the final `ood_corner_dataset_sma` test set; `experiments/generate_figures.py`, 3 seeds per weight, smaller configuration). On the shell, weights 0.1–1 gave +4% to +8% OOD diameter gains and weight 10 was harmful (−17%); `physics_weight=1.0` was chosen. On the untouched test corners, with the full configuration, the gain at that weight is −1.1% ± 4.2%, so the shell result did not transfer (RESULTS.md §5).
 
 `run_ablation(train_df, id_test_df, ood_df, config)`: trains physics-off and physics-on, evaluates on a genuinely held-out `id_test_df` (not `train_df` — that was a real bug, see RESULTS.md §5) and `ood_df`. `run_ablation_multi_seed(...)` runs this across seeds and aggregates mean ± SD.
 
@@ -138,8 +138,16 @@ reduced-order model of the ring, not COMSOL's equations:
   - `xi` no more than the Brinson reverse-kinetics bound at `sigma`, with `sigma_Af = C_A (37 − Af)`
   - `D ≤ D_free`
 
-Given COMSOL's own diameter, this reduced model reproduces COMSOL's suture pressure to within about 0.1%
-and its volume-averaged martensite to within about 0.01 (`tests/test_comsol_dataset_and_ring_physics.py`).
+The physics loss uses COMSOL's exact ring geometry, suture stiffness scale and material constants
+(copied, not fitted). Given COMSOL's own diameter, this reduced model reproduces COMSOL's suture pressure to
+within about 0.1% and, with `ring_sma.xi_from_diameter`, its volume-averaged martensite to 0.003 RMSE (ID)
+and 0.005 (OOD) (`tests/test_comsol_dataset_and_ring_physics.py`).
+
+**Fair ξ baseline.** The data-only network's ξ output never receives a gradient, so its ξ is not a fair
+comparison. Every COMSOL result also reports the data-only network's predicted diameter passed through
+`ring_sma.xi_from_diameter` after training (suture law plus closure, solved for ξ; the kinetics bound is
+not applied because clipping to it made this baseline worse). The synthetic experiments use the
+equivalent `pinn_scaffold.xi_from_diameter`.
 
 **Training.** `TrainConfig`: epochs 2000, hidden_dim 32, lr 5e-3, physics_weight 1.0, ramp over
 400 epochs. These values were fixed before the test sets were evaluated. The diameter loss is scaled

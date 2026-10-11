@@ -50,14 +50,16 @@ reporting training error as if it were generalization error. Once fixed
 a genuinely held-out ID test split, and `ood_shell_dataset` for a
 validation OOD set disjoint from the final `ood_corner_dataset_sma` test
 set), the diameter-OOD improvement that looked like a robust 4-13.5% across
-seeds turned out to be noise-level (roughly -2% to +2% on average, with
-individual seeds landing anywhere from -10% to +8%) at every physics_weight
-tried -- it does NOT survive proper train/val/test separation. The
-martensite-fraction (xi) recovery improvement, by contrast, held up
-completely intact under the same corrected methodology, at every weight
-tested (0.1 to 20): the physics-off model's xi output stays near chance
-(RMSE ~0.5) while physics-on recovers it to ~0.11-0.14 RMSE, always. See
-RESULTS.md for the full accounting of what changed and why.
+seeds does NOT survive proper train/val/test separation: on the untouched
+test corners it is -1.1% +/- 4.2% (on the validation shell the selected
+weight shows +8%, which does not transfer; RESULTS.md section 5). The
+physics-off model's own xi output stays near chance (RMSE ~0.5) while
+physics-on recovers xi to ~0.11-0.21 RMSE at every weight tested (0.1 to
+10). That comparison is unfair, though: the physics-off xi head never
+receives a gradient. Passing the physics-off model's predicted diameter
+through the same equations after training (xi_from_diameter below) gives
+xi at least as accurate as physics-on, except under heavy training noise.
+See RESULTS.md sections 5 and 5b for the full accounting.
 
 Requires torch (`pip install -e ".[pinn]"` from aipv/heart_valve_project).
 """
@@ -205,19 +207,17 @@ def xi_from_diameter(d, df: pd.DataFrame, iters: int = 60) -> np.ndarray:
 @dataclass
 class TrainConfig:
     # Re-tuned after fixing the tuning methodology (see this module's
-    # docstring): physics_weight was swept from 0.1 to 20 using ONLY a
+    # docstring): physics_weight was swept from 0.1 to 10 using ONLY a
     # validation OOD shell (valvebench.datasets.synthetic.ood_shell_dataset)
     # disjoint from the final ood_corner_dataset_sma test set, across up to
-    # 7 seeds per weight. Result: diameter-OOD RMSE "improvement" is
-    # noise-level (roughly -2% to +2% mean, individual seeds from -10% to
-    # +8%) at every weight tried -- it does not reliably beat
-    # physics_weight=0 once the test set isn't used for tuning. The
-    # martensite-fraction (xi) recovery improvement, in sharp contrast, is
-    # large (near-chance ~0.5 RMSE for physics-off vs ~0.11-0.14 for
-    # physics-on) and completely consistent at every weight from 0.1 to 20.
-    # physics_weight=1.0 is chosen as a modest, defensible middle value:
-    # strong enough to be a real regularizer (full xi-recovery benefit,
-    # confirmed at this weight specifically), without the unjustified
+    # 3 seeds per weight (experiments/generate_figures.py). On that shell,
+    # weights 0.1-1 show +4% to +8% OOD diameter gains and weight 10 is
+    # harmful; on the untouched test corners the selected weight gives
+    # -1.1% +/- 4.2%, so the shell gain does not transfer. The xi
+    # head was much better than physics-off's own (untrained) xi head at
+    # every weight; that comparison was later found to be unfair (RESULTS.md
+    # section 5b). physics_weight=1.0 is chosen as a modest, defensible
+    # middle value: strong enough to be a real regularizer, without the unjustified
     # in-distribution cost that high weights like the previous default
     # (10.0, chosen when tuning still leaked into the test set) incurred
     # for no reliable diameter-OOD benefit.
@@ -297,10 +297,9 @@ def predict(model: "ScaffoldPINN", df: pd.DataFrame) -> np.ndarray:
 
 def predict_latent(model: "ScaffoldPINN", df: pd.DataFrame):
     """Predicted (diameter, sigma, xi) -- sigma/xi are never directly
-    supervised during training, so comparing them against the generator's
-    true Sigma_MPa/Xi columns (when present) is a check of whether the
-    physics residuals successfully forced the network to recover latent
-    state it was never shown, not a training diagnostic.
+    supervised during training. For a physics_weight=0 model the xi output
+    never receives a gradient, so score its xi with xi_from_diameter on its
+    predicted diameter instead (the fair baseline).
     """
     _require_torch()
     theta_raw = torch.tensor(df[THETA_COLUMNS].values, dtype=torch.float32)
@@ -372,6 +371,9 @@ def run_ablation(
         ood_true_xi = ood_df["Xi"].values
         result["mlp_only"]["ood_xi_rmse"] = rmse(ood_true_xi, mlp_ood_xi)
         result["pinn"]["ood_xi_rmse"] = rmse(ood_true_xi, pinn_ood_xi)
+        # fair baseline: xi from each model's predicted diameter via the physics equations
+        result["mlp_only"]["ood_xi_posthoc_rmse"] = rmse(ood_true_xi, xi_from_diameter(mlp_ood_pred, ood_df))
+        result["pinn"]["ood_xi_posthoc_rmse"] = rmse(ood_true_xi, xi_from_diameter(pinn_ood_pred, ood_df))
 
     return result
 
@@ -402,7 +404,7 @@ def run_ablation_multi_seed(
     summary = {}
     for model_key in ("mlp_only", "pinn"):
         summary[model_key] = {}
-        for metric_key in ("id_rmse", "ood_rmse", "ood_xi_rmse"):
+        for metric_key in ("id_rmse", "ood_rmse", "ood_xi_rmse", "ood_xi_posthoc_rmse"):
             values = _collect(model_key, metric_key)
             if len(values) == 0:
                 continue

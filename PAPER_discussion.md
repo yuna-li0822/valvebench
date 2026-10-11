@@ -34,11 +34,31 @@ grows. The frame would open ahead of the annulus. Once the sutures no longer hol
 against the child's own annulus and press outward on it continuously, at the frame's chronic outward
 force.
 
-**The proposed designs make this worse, not better.** For the 10 mm-strut design, realistic sutures carry
-only 1.1 N each against a USP minimum knot-pull strength of about 26 N (size 2-0). So the sutures would
-hold the frame almost completely, at 13.3 mm, until they had lost about 95% of their strength. Release
-would then come late and abruptly, not gradually. Both the synthetic generator and the COMSOL models
-assumed a smooth exponential decay of suture stiffness, and this behaviour falls outside that assumption.
+**Sutures break; they do not soften.** An absorbable suture keeps holding until its remaining strength
+falls below the load it carries, and then it breaks. Both the synthetic generator and the COMSOL models
+instead assumed a smooth exponential decay of suture stiffness, which is what produces their gradual
+expansion curves. Real release is a step. Because the sutures are tied one after another around the middle
+row, each carries the row's full hoop tension, and the first break releases the whole row.
+
+**Predicted release time.** Release comes when rated strength × retention falls below the load per suture
+(`experiments/suture_release_time.py`; USP minimum knot-pull 26.3 N per strand for size 2-0, PDS II
+retention, a double-stranded suture taken as two strands sharing the load). Retention is measured only to
+6 weeks, so two extrapolations bracket each estimate:
+
+| Design | Load per suture | Load / strength | Predicted release |
+|---|---|---|---|
+| 10 mm struts, 12 sutures | 1.1 N | 0.04 | 25–34 weeks (6–8 months), around complete absorption |
+| Taper, 12 sutures | 9.1 N | 0.35 | 12–14 weeks (about 3 months) |
+| Taper, 6 double-stranded sutures | 14.3 N | 0.27 | 15–17 weeks (about 4 months); 7–8 weeks if one strand carries the load |
+
+These estimates are uncertain in both directions. Real sutures usually exceed the USP minimum, which
+delays release. Strength scatter between sutures (the weakest one sets the release), knot weakening, and
+cyclic in-vivo loading all bring it earlier.
+
+**The proposed designs make the mismatch sharper, not smaller.** The 10 mm-strut design loads its sutures
+so lightly that they hold the frame almost completely, at 13.3 mm, until they are nearly absorbed, and
+then let go all at once. The taper releases within about 3–4 months. Every design releases within the first
+year, against roughly 15 years of annular growth.
 
 **Design implications.** Matching expansion to growth points to one of four approaches:
 
@@ -90,7 +110,8 @@ Two practical consequences follow:
 clean.** This held on synthetic data and on finite-element data.
 
 **It did help in three ways:**
-- **Noisy data:** diameter error fell by up to 45% on synthetic data and 20% on finite-element data.
+- **Noisy data:** diameter error fell by 30% at the heaviest noise on synthetic data and by 20% on
+  finite-element data.
 - **Sparse data:** error also fell when diameter was measured at only a few times.
 - **Hidden state (finite-element data only):** the network recovered the scaffold's internal martensite
   fraction on unseen corner designs 38% more accurately than a data-only network whose diameter was passed
@@ -120,8 +141,10 @@ that training converged.
 - **All results are simulated.** No physical scaffold, suture or tissue was tested.
 - **The COMSOL training device is idealised:** a solid ring with sutures 1000× stiffer than realistic
   (Section 4.2).
-- **Suture behaviour is modelled as a smooth exponential stiffness decay.** Real absorbable sutures lose
-  strength and then break (Section 4.1).
+- **Suture behaviour is modelled as a smooth exponential stiffness decay.** Real absorbable sutures hold
+  until their remaining strength falls below the load and then break (Section 4.1). This contradicts the
+  gradual expansion in both the synthetic training data and the COMSOL dataset: the real release is a step,
+  at the predicted release times in Section 4.1.
 - **The lattice-cell model is idealised:** flat and plane-stress, it omits the two-strut crowns at the
   frame ends, uses strut dimensions estimated from a render, and has no plasticity.
 - **Fatigue is not modelled:** a frame sees tens of millions of cardiac cycles per year.

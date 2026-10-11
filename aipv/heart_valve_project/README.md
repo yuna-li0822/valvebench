@@ -122,7 +122,7 @@ The patient-growth numbers are dominated by real biological variation: children 
 
 - Diameter OOD RMSE: **−1.1% ± 4.2%** (MAE: **−0.5% ± 4.2%**) — not a reliable effect (1/5 seeds positive).
 - Martensite-fraction (never-supervised) OOD RMSE: 60% better than the data-only network's own ξ output, but that output is never trained. Against a fair baseline (the data-only network's diameter passed through the same physics equations after training) there is **no gain**: 0.171 vs 0.206. PINNVALVE is better only under heavy noise (RESULTS.md §5b, `experiments/xi_posthoc_synthetic_report.md`).
-- The physics prior's benefit **is** real and substantial in two specific regimes: when training data is scarce (up to +24% OOD RMSE improvement at 6 training designs, fading to noise by ~24 designs) and when observations are noisy (5% improvement at low noise, **45% at high noise**, scaling monotonically) — see `experiments/figures/data_efficiency.png` and RESULTS.md.
+- The physics prior helps in two narrower regimes: very scarce data (+10% and +8% OOD RMSE improvement with 6 and 12 training designs, 3/3 seeds each; none from 24 designs up) and heavy observation noise (**+30% at 1.0 mm noise**, 3/3 seeds; none at 0.3 mm and below) — `experiments/robustness_report.md`, RESULTS.md §6.
 
 **PINNVALVE on COMSOL finite-element data** (RESULTS.md §7c, `comsol_leaderboard.md`). 136 COMSOL designs of a suture-held superelastic nitinol ring; the physics loss is a reduced-order model of the ring, not the simulator's equations; 5 seeds:
 

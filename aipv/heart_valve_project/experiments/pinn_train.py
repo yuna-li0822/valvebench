@@ -29,9 +29,10 @@ survive the corrected methodology:
 1. Diameter RMSE (the only directly-supervised quantity): the physics
    residual's effect on OOD diameter RMSE turned out to be noise-level
    once hyperparameter tuning stopped leaking into the reported test set.
-2. Martensite-fraction (xi) RMSE: physics-on recovers it far better than
-   physics-off, consistently, and this DID survive the corrected
-   methodology -- it's the robust finding.
+2. Martensite-fraction (xi) RMSE: physics-on's xi is far better than
+   physics-off's own xi output, but that output is never trained. Against
+   the fair baseline (physics-off's diameter through the same equations),
+   physics-on is not better. Both are reported.
 
 Usage:
     py -3 aipv/heart_valve_project/experiments/pinn_train.py
@@ -79,9 +80,10 @@ def main():
         return f"{d['mean']:.4f} ± {d['std']:.4f}" if d else "n/a"
 
     print()
-    print(f"{'model':<12} {'ID RMSE (mm)':>18} {'OOD RMSE (mm)':>18} {'OOD xi RMSE':>18}")
+    print(f"{'model':<12} {'ID RMSE (mm)':>18} {'OOD RMSE (mm)':>18} {'OOD xi RMSE':>18} {'xi from D':>18}")
     for key, label in (("mlp_only", "mlp_only"), ("pinn", "PINNVALVE")):
-        print(f"{label:<12} {fmt(summary[key].get('id_rmse')):>18} {fmt(summary[key].get('ood_rmse')):>18} {fmt(summary[key].get('ood_xi_rmse')):>18}")
+        print(f"{label:<12} {fmt(summary[key].get('id_rmse')):>18} {fmt(summary[key].get('ood_rmse')):>18} "
+              f"{fmt(summary[key].get('ood_xi_rmse')):>18} {fmt(summary[key].get('ood_xi_posthoc_rmse')):>18}")
     print()
     imp = summary["ood_improvement_pct"]
     print(f"OOD diameter RMSE improvement: {imp['mean']:.2f}% ± {imp['std']:.2f}% ({imp['n_positive']}/{imp['n_seeds']} seeds positive)")
@@ -121,10 +123,14 @@ def _render_report(config: TrainConfig, train_df, id_test_df, ood_df, result) ->
         f"- Config: epochs={config.epochs}, hidden_dim={config.hidden_dim}, "
         f"physics_weight={config.physics_weight}, physics_ramp_epochs={config.physics_ramp_epochs}",
         "",
-        "| model | ID RMSE (mm) | OOD RMSE (mm) | OOD xi RMSE |",
-        "| --- | ---: | ---: | ---: |",
-        f"| mlp_only (physics_weight=0) | {fmt(mlp.get('id_rmse'))} | {fmt(mlp.get('ood_rmse'))} | {fmt(mlp.get('ood_xi_rmse'))} |",
-        f"| PINNVALVE | {fmt(pinn.get('id_rmse'))} | {fmt(pinn.get('ood_rmse'))} | {fmt(pinn.get('ood_xi_rmse'))} |",
+        "OOD xi RMSE = the network's own xi output. xi from D = xi computed after training from the",
+        "predicted diameter with the physics equations (`xi_from_diameter`); for mlp_only this is the",
+        "fair baseline, because its own xi output never receives a gradient.",
+        "",
+        "| model | ID RMSE (mm) | OOD RMSE (mm) | OOD xi RMSE | OOD xi RMSE, xi from D |",
+        "| --- | ---: | ---: | ---: | ---: |",
+        f"| mlp_only (physics_weight=0) | {fmt(mlp.get('id_rmse'))} | {fmt(mlp.get('ood_rmse'))} | {fmt(mlp.get('ood_xi_rmse'))} | {fmt(mlp.get('ood_xi_posthoc_rmse'))} |",
+        f"| PINNVALVE | {fmt(pinn.get('id_rmse'))} | {fmt(pinn.get('ood_rmse'))} | {fmt(pinn.get('ood_xi_rmse'))} | {fmt(pinn.get('ood_xi_posthoc_rmse'))} |",
         "",
         f"OOD diameter RMSE improvement: **{imp['mean']:.2f}% ± {imp['std']:.2f}%** "
         f"({imp['n_positive']}/{imp['n_seeds']} seeds positive)",
@@ -139,14 +145,13 @@ def _render_report(config: TrainConfig, train_df, id_test_df, ood_df, result) ->
         "physics_weight was re-tuned against a separate validation OOD set (never used",
         "here), the diameter effect did not survive.",
         "",
-        "The martensite-fraction (xi) recovery effect DID survive: xi is never directly",
-        "supervised during training (only diameter is), yet the physics-on model",
-        "recovers it far more accurately than the physics-off model, consistently",
-        "across every seed and every physics_weight tried during development (0.1 to",
-        "20). This is the honest, defensible PINNVALVE result -- physics residuals let",
-        "the network infer physically consistent latent state it was never shown, even",
-        "though they don't reliably improve the directly-supervised quantity's",
-        "out-of-distribution accuracy in this setup.",
+        "The martensite-fraction (xi) comparison needs care. xi is never supervised.",
+        "Physics-on's xi is far better than physics-off's own xi output, but that",
+        "output never receives a gradient, so it is not a fair baseline. The fair",
+        "baseline passes physics-off's predicted diameter through the same physics",
+        "equations after training (last column); against it, physics-on is not",
+        "better on this data. See RESULTS.md section 5b for the noise and",
+        "sparse-label conditions.",
         "",
         "This is a controlled synthetic benchmark: the physics residual's functional",
         "form (valvebench/physics/sma_constitutive.py) matches the generator used to",

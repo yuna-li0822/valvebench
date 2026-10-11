@@ -99,12 +99,14 @@ def plot_id_vs_ood_comparison(model_names, id_values, id_errs, ood_values, ood_e
     plt.close(fig)
 
 
-def plot_physics_weight_sweep(weights, diam_improvement_mean, diam_improvement_std, xi_mlp_mean, xi_pinn_mean, save_path):
+def plot_physics_weight_sweep(weights, diam_improvement_mean, diam_improvement_std, xi_mlp_mean, xi_pinn_mean, save_path,
+                              xi_mlp_posthoc_mean=None):
     """Is there a physics_weight regime where the physics prior reliably
     helps diameter prediction, or does the effect stay within noise at
-    every weight (this project's actual, honestly-reported finding)? And
-    does the (much more robust) latent-state recovery benefit hold at
-    every weight regardless?
+    every weight (this project's actual, honestly-reported finding)? Right
+    panel: xi error of physics-on vs physics-off's own (untrained) xi output
+    and, if given, vs the fair baseline (physics-off's diameter through the
+    physics equations).
     """
     _require_mpl()
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.5))
@@ -114,14 +116,16 @@ def plot_physics_weight_sweep(weights, diam_improvement_mean, diam_improvement_s
     axes[0].set_xscale("log")
     axes[0].set_xlabel("physics_weight")
     axes[0].set_ylabel("OOD diameter RMSE improvement (%)")
-    axes[0].set_title("Diameter: noise-level at every weight tested")
+    axes[0].set_title("OOD diameter change vs physics_weight (validation shell)")
 
-    axes[1].plot(weights, xi_mlp_mean, marker="o", label="physics_weight=0")
+    axes[1].plot(weights, xi_mlp_mean, marker="o", label="physics_weight=0, own ξ output (untrained)")
+    if xi_mlp_posthoc_mean is not None:
+        axes[1].plot(weights, xi_mlp_posthoc_mean, marker="^", label="physics_weight=0, ξ from diameter (fair baseline)")
     axes[1].plot(weights, xi_pinn_mean, marker="s", label="physics-on")
     axes[1].set_xscale("log")
     axes[1].set_xlabel("physics_weight")
     axes[1].set_ylabel("OOD martensite-fraction (xi) RMSE")
-    axes[1].set_title("Latent recovery: robust at every weight tested")
+    axes[1].set_title("Latent ξ: physics-on vs untrained head and fair baseline")
     axes[1].legend()
 
     fig.tight_layout()

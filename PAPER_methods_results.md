@@ -222,7 +222,7 @@ solved from the D → ε mapping, the closure and the Brinson kinetics together.
 
 - **Metrics:** root-mean-square error (RMSE) and mean absolute error (MAE) in mm, and R² for the
   patient task.
-- **Reporting:** results are the mean ± standard deviation over seeds.
+- **Reporting:** results are the mean ± standard deviation over seeds (population SD for the synthetic tables, sample SD for the COMSOL tables).
 - **Physics benefit:** reported as the per-seed percentage change in OOD diameter RMSE, with the
   number of seeds in which it was positive.
 - **Leakage prevention:** all splits are by patient or by design, so no individual contributes to two
@@ -265,14 +265,14 @@ wider age range. OOD RMSE is worse than ID RMSE for every model.
 |---|---|---|---|
 | Data-only network | 0.212 ± 0.035 | 1.944 ± 0.098 | 0.519 ± 0.053 |
 | PINNVALVE | 0.223 ± 0.021 | 1.962 ± 0.067 | 0.206 ± 0.011 |
-| Data-only D + closure ξ (post hoc) | — | — | 0.171 ± 0.038 |
+| Data-only D + closure ξ (post hoc) | — | — | 0.171 ± 0.034 |
 
 **Diameter: no reliable gain.** Adding physics did not reliably improve OOD diameter error
 (−1.1% ± 4.2%, 1 of 5 seeds positive).
 
 **Hidden state: no gain over a fair baseline.** Against the data-only network's own ξ output, physics
 looked 60% better. That output is never trained, however. Passing the data-only network's diameter through
-the physics equations after training gave 0.171 ± 0.038, slightly better than PINNVALVE (0.206). Across
+the physics equations after training gave 0.171 ± 0.034, slightly better than PINNVALVE (0.206). Across
 conditions, PINNVALVE's ξ was better only with heavy training noise (1.0 mm: 0.200 vs 0.285, 3 of 3 seeds),
 where its diameter was also better (1.94 vs 2.78 mm); with sparse labels the post-hoc baseline was better
 (`experiments/xi_posthoc_synthetic_report.md`). On synthetic data the physics equations invert the
@@ -283,9 +283,11 @@ It came from tuning the physics weight on the test set and from reporting traini
 and it disappeared once both were corrected.
 
 **The physics prior helped most under noise and data scarcity** (3 seeds per condition):
-- **Noise:** the OOD diameter improvement grew steadily with measurement noise, from +5.2% at 0.05 mm
-  to +45.5% at 1.0 mm.
-- **Scarcity:** it was +24.1% with 6 training designs and within ±5% from 12 designs upward.
+- **Noise:** with heavy training-label noise (1.0 mm) PINNVALVE's OOD diameter error was 30% lower
+  (1.94 vs 2.78 mm, 3 of 3 seeds); at 0.6 mm 7.5% lower (2 of 3); at 0.3 mm and below, no gain. PINNVALVE's
+  error stayed flat as noise grew, while the data-only network's rose 41%.
+- **Scarcity:** with 6 and 12 training designs the gain was 10% and 8% (3 of 3 seeds each); from 24
+  designs upward there was none (`experiments/robustness_report.md`).
 - **Sparse labels:** with diameter labelled only at months 0 and 12, held-out RMSE fell from 1.31 to
   0.82 mm.
 - **Far extrapolation:** with each design range widened by 25%, PINNVALVE's ξ error was 43% higher than
@@ -435,7 +437,9 @@ The pattern from synthetic data replicates on independent finite-element data:
   sutures cannot hold that ring (Section 3.3), so it stands in for the regime where sutures hold most of the
   crimp (82% at implant). Realistic sutures do reach that regime on the proposed lattice designs: the
   10 mm design is held at 13.3 mm and the taper at 14.0–15.5 mm (Section 4.2).
-- **The suture-decay law is assumed,** and is shared by the simulator and the physics loss.
+- **The suture-decay law is assumed,** and is shared by the simulator and the physics loss. It is smooth,
+  but real absorbable sutures break once their strength falls below the load, so real release is a step
+  (Discussion, Section 4.1).
 - **The physics loss uses the simulator's exact parameters** (geometry, suture stiffness, material
   constants). Given COMSOL's true diameter, the closure alone gives ξ to 0.005 RMSE on OOD designs, so
   ξ recovery tests the reduced-order form and the training method, not independently chosen constants.

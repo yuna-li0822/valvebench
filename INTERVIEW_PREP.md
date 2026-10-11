@@ -26,7 +26,7 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 
 - **What I found:** on designs outside the training range, diameter error is about the same with and without the physics term (OOD MAE 1.32 vs 1.32 mm; −0.5% ± 4.2%; better in only 1 of 5 seeds).
 - **Why that's believable:** diameter is directly supervised and, with enough clean data, a flexible network already learns it. Physics has little to add there. It helps where the data can't: the variable you never observe, and when data is scarce or noisy.
-- **Where physics did help:** up to about 24% better OOD diameter error with only 6 training designs; about 45% better at high measurement noise; on COMSOL data, OOD ξ 38% lower than a fair baseline (0.047 vs 0.076; no gain in-distribution).
+- **Where physics did help:** about 10% better OOD diameter error with only 6 training designs (8% with 12, none from 24 up); 30% better at the heaviest measurement noise (none at low noise); on COMSOL data, OOD ξ 38% lower than a fair baseline (0.047 vs 0.076; no gain in-distribution).
 - **Where I thought it helped and it didn't:** on synthetic data ξ looked 60% better, but the data-only network's ξ output was never trained. Given the same equations after training, its diameter gives ξ at 0.171 vs PINNVALVE's 0.206. I caught this myself; it is the same kind of check as the 13% bug.
 - **How to frame it:** "I tested a popular claim, that physics always helps, and found where it does and doesn't in this system." Don't call the diameter result a failure, and don't hide it.
 
@@ -79,7 +79,7 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 - **Why synthetic data?** No public dataset links scaffold design to expansion, and I don't have lab access. I made the synthetic side as literature-grounded as I could and labelled everything.
 - **Is this novel?** The physics-informed method isn't new. The application (Brinson/Auricchio-Sacco physics in a network for a growth-adaptive pediatric valve scaffold) and the rigorous, honest test of when it helps appear to be, based on my literature search. I can't claim nobody has done it anywhere.
 - **What would change your conclusion?** Real measured data (bench tests of a frame) where physics improves diameter error on unseen designs. On COMSOL data it only reliably did so under measurement noise.
-- **Did you tune hyperparameters?** Physics weight was swept (0.1–20) on a separate validation set. Architecture, learning rate and epochs were set by hand and not tuned; I say so.
+- **Did you tune hyperparameters?** Physics weight was swept (0.1–10) on a separate validation set. It looked +8% better there, and that did not transfer to the test set (−1.1%). Architecture, learning rate and epochs were set by hand and not tuned; I say so.
 - **Is it clinically useful?** No. It's a computational design tool; benchtop, hydrodynamic and biological validation are required first.
 - **Why 5 seeds?** Single runs mislead. All results are mean ± SD across 5 seeds and I report how many seeds went each way.
 

@@ -1,0 +1,124 @@
+"""Data-scarcity and noise-robustness experiments for PINNVALVE on synthetic data.
+
+Replaces earlier ad-hoc runs: the noise table in RESULTS.md section 6 had no script in the
+repo, and the data-efficiency figure was scored on the validation shell that was used to
+choose physics_weight. Here both experiments use the main-ablation TrainConfig (nothing
+re-tuned) and are scored only on the untouched test sets: held-out interior designs (ID)
+and the 16 design-box corners (OOD), both at the baseline noise level (0.1 mm).
+
+  scarcity  6, 12, 24, 48 or all 72 training designs (fixed random subsets), 3 seeds each
+  noise     training-data noise_scale 0.05, 0.1, 0.3, 0.6, 1.0 mm, 3 seeds each; the
+            designs are the same at every noise level (same generator seed)
+
+xi is scored both as each network's own output and, fairly, from the predicted diameter
+through the physics equations (pinn_scaffold.xi_from_diameter).
+
+Usage:
+    py -3 aipv/heart_valve_project/experiments/robustness_experiments.py
+"""
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+try:
+    import torch  # noqa: F401
+except Exception:
+    print('torch not installed - skipped. pip install -e "aipv/heart_valve_project[pinn]"')
+    raise SystemExit(0)
+
+_PROJECT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_PROJECT_DIR))
+
+from valvebench.datasets.synthetic import interior_train_val_test_split_sma, ood_corner_dataset_sma  # noqa: E402
+from valvebench.evaluation import plots  # noqa: E402
+from valvebench.models.pinn_scaffold import (  # noqa: E402
+    TrainConfig, predict_latent, train_scaffold_pinn, xi_from_diameter)
+
+SEEDS = (0, 1, 2)
+DESIGN_COUNTS = (6, 12, 24, 48, None)  # None = all training designs
+NOISE_LEVELS = (0.05, 0.1, 0.3, 0.6, 1.0)
+OUT_JSON = _PROJECT_DIR / "experiments" / "robustness_results.json"
+OUT_MD = _PROJECT_DIR / "experiments" / "robustness_report.md"
+FIG = _PROJECT_DIR / "experiments" / "figures" / "data_efficiency.png"
+
+
+def _rmse(a, b):
+    return float(np.sqrt(np.mean((np.asarray(a) - np.asarray(b)) ** 2)))
+
+
+def score(model, df):
+    d, _, xi = predict_latent(model, df)
+    return {"d_rmse": _rmse(d, df.Diameter_mm), "xi_head": _rmse(xi, df.Xi),
+            "xi_from_d": _rmse(xi_from_diameter(d, df), df.Xi)}
+
+
+def run_cell(train_df, id_df, ood_df):
+    out = []
+    for s in SEEDS:
+        r = {}
+        for key, w in (("mlp", 0.0), ("pinn", TrainConfig().physics_weight)):
+            model = train_scaffold_pinn(train_df, TrainConfig(physics_weight=w, seed=s)).model
+            r[key] = {"id": score(model, id_df), "ood": score(model, ood_df)}
+        out.append(r)
+    return out
+
+
+def summary(runs):
+    def m(model, split, metric):
+        return float(np.mean([r[model][split][metric] for r in runs]))
+    gains = [1 - r["pinn"]["ood"]["d_rmse"] / r["mlp"]["ood"]["d_rmse"] for r in runs]
+    return {"mlp_ood": m("mlp", "ood", "d_rmse"), "pinn_ood": m("pinn", "ood", "d_rmse"),
+            "mlp_id": m("mlp", "id", "d_rmse"), "pinn_id": m("pinn", "id", "d_rmse"),
+            "gain_pct": 100 * float(np.mean(gains)), "gain_sd": 100 * float(np.std(gains)),
+            "seeds_positive": int(sum(g > 0 for g in gains)),
+            "xi_pinn": m("pinn", "ood", "xi_head"), "xi_mlp_from_d": m("mlp", "ood", "xi_from_d")}
+
+
+def main():
+    sys.stdout.reconfigure(encoding="utf-8")
+    train_full, _, id_df = interior_train_val_test_split_sma(n_samples=120, seed=1)
+    ood_df = ood_corner_dataset_sma(seed=123)
+    ids = np.array(sorted(train_full.sample_id.unique()))
+    res = {"scarcity": {}, "noise": {}, "seeds": list(SEEDS)}
+
+    for n in DESIGN_COUNTS:
+        n_use = len(ids) if n is None else n
+        pick = set(np.random.RandomState(0).choice(ids, size=n_use, replace=False))
+        runs = run_cell(train_full[train_full.sample_id.isin(pick)].reset_index(drop=True), id_df, ood_df)
+        res["scarcity"][str(n_use)] = {"runs": runs, "summary": summary(runs)}
+        s = res["scarcity"][str(n_use)]["summary"]
+        print(f"designs {n_use}: OOD mlp {s['mlp_ood']:.3f} pinn {s['pinn_ood']:.3f} ({s['gain_pct']:+.1f}%)", flush=True)
+
+    for noise in NOISE_LEVELS:
+        noisy, _, _ = interior_train_val_test_split_sma(n_samples=120, seed=1, noise_scale=noise)
+        runs = run_cell(noisy, id_df, ood_df)
+        res["noise"][str(noise)] = {"runs": runs, "summary": summary(runs)}
+        s = res["noise"][str(noise)]["summary"]
+        print(f"noise {noise}: OOD mlp {s['mlp_ood']:.3f} pinn {s['pinn_ood']:.3f} ({s['gain_pct']:+.1f}%)", flush=True)
+
+    OUT_JSON.write_text(json.dumps(res, indent=1), encoding="utf-8")
+    counts = [int(k) for k in res["scarcity"]]
+    plots.plot_data_efficiency(counts, [res["scarcity"][str(c)]["summary"]["mlp_ood"] for c in counts],
+                               [res["scarcity"][str(c)]["summary"]["pinn_ood"] for c in counts], FIG)
+
+    L = ["# Data-scarcity and noise-robustness experiments", "",
+         "Auto-generated by `experiments/robustness_experiments.py`. Synthetic data, main-ablation TrainConfig, "
+         f"seeds {list(SEEDS)}. Scored on the untouched test sets at baseline noise: OOD = 16 design-box corners. "
+         "Gain = mean over seeds of 1 − PINNVALVE / data-only OOD diameter RMSE (± population SD). "
+         "ξ columns: PINNVALVE's own ξ output vs the fair baseline (data-only diameter through the physics equations).", ""]
+    for part, label, col in (("scarcity", "## Data scarcity", "training designs"), ("noise", "## Training-data noise", "noise_scale (mm)")):
+        L += [label, "", f"| {col} | data-only OOD RMSE (mm) | PINNVALVE OOD RMSE (mm) | gain | seeds positive | "
+              "PINNVALVE OOD ξ | data-only D → ξ (fair) |", "| ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+        for k, v in res[part].items():
+            s = v["summary"]
+            L.append(f"| {k} | {s['mlp_ood']:.3f} | {s['pinn_ood']:.3f} | {s['gain_pct']:+.1f}% ± {s['gain_sd']:.1f}% | "
+                     f"{s['seeds_positive']}/{len(SEEDS)} | {s['xi_pinn']:.3f} | {s['xi_mlp_from_d']:.3f} |")
+        L.append("")
+    OUT_MD.write_text("\n".join(L), encoding="utf-8")
+    print(f"-> {OUT_MD}\n-> {FIG}")
+
+
+if __name__ == "__main__":
+    main()
