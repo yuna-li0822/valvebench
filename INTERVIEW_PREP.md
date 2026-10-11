@@ -83,7 +83,18 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 - **Is it clinically useful?** No. It's a computational design tool; benchtop, hydrodynamic and biological validation are required first.
 - **Why 5 seeds?** Single runs mislead. All results are mean ± SD across 5 seeds and I report how many seeds went each way.
 
-## Numbers to know cold
+## Numbers to know cold (20 paired runs, resampled splits; RESULTS.md §0)
+
+| | |
+|---|---|
+| COMSOL, martensite on unseen designs vs fair baseline | **+35% [32, 38], 20/20 runs**; +39% with noise or sparse labels |
+| COMSOL, diameter with sparse labels (months 0/6/12) | +33% in-distribution [24, 41], +9% unseen designs |
+| COMSOL, diameter with 0.03 mm noise | +8% unseen designs [4, 11], 18/20 |
+| Clean data, diameter | no gain on unseen designs; −14% in-distribution (both datasets) |
+| Synthetic, diameter at 1.0 mm noise | +30% [25, 35], 20/20 |
+| Synthetic, martensite vs fair baseline | worse, except +16% at 1.0 mm noise |
+
+Single-split numbers (older):
 
 | | |
 |---|---|

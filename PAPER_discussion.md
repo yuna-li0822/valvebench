@@ -106,16 +106,18 @@ Two practical consequences follow:
 
 ### 4.3 What the machine-learning results mean
 
-**The physics prior did not reliably improve diameter prediction when training data were plentiful and
-clean.** This held on synthetic data and on finite-element data.
+**The physics prior did not improve diameter prediction when training data were plentiful and clean,**
+and it cost about 14% on held-out interior designs. This held on synthetic data and on finite-element data.
 
-**It did help in three ways:**
-- **Noisy data:** diameter error fell by 30% at the heaviest noise on synthetic data and by 20% on
-  finite-element data.
-- **Sparse data:** error also fell when diameter was measured at only a few times.
+**It did help in three ways** (20 paired runs each, Section 3.6):
+- **Noisy data:** out-of-distribution diameter error fell by 8% on finite-element data and by up to 30% at
+  the heaviest noise on synthetic data.
+- **Sparse data:** with diameter measured at only three times, finite-element diameter error fell by 33%
+  on held-out designs and 9% on unseen designs.
 - **Hidden state (finite-element data only):** the network recovered the scaffold's internal martensite
-  fraction on unseen corner designs 38% more accurately than a data-only network whose diameter was passed
-  through the same physics equations after training (no gain on interior designs). On synthetic data this gain disappeared against that baseline,
+  fraction on unseen designs 35–39% more accurately than a data-only network whose diameter was passed
+  through the same physics equations after training, in all 60 runs. On interior designs it helped only
+  with sparse labels. On synthetic data this gain disappeared against that baseline,
   except under heavy noise.
 
 These conditions match clinical follow-up, where a child's valve diameter is measured by echocardiography

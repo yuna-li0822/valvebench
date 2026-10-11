@@ -223,6 +223,7 @@ solved from the D → ε mapping, the closure and the Brinson kinetics together.
 - **Metrics:** root-mean-square error (RMSE) and mean absolute error (MAE) in mm, and R² for the
   patient task.
 - **Reporting:** results are the mean ± standard deviation over seeds (population SD for the synthetic tables, sample SD for the COMSOL tables).
+- **20-run study (Section 3.6):** every PINNVALVE comparison was repeated 20 times, each run with its own training seed and its own resampled data split. Physics on and off share each seed and split, so comparisons are paired. We report the mean relative gain with a 95% bootstrap confidence interval (10,000 resamples) and a two-sided Wilcoxon signed-rank test, with a Bonferroni correction over all 48 comparisons (p < 0.001).
 - **Physics benefit:** reported as the per-seed percentage change in OOD diameter RMSE, with the
   number of seeds in which it was positive.
 - **Leakage prevention:** all splits are by patient or by design, so no individual contributes to two
@@ -446,6 +447,44 @@ The pattern from synthetic data replicates on independent finite-element data:
 - **Not modelled:** fatigue under cardiac cycling, plasticity, and the frame-end crowns.
 - **The lattice is idealised:** flat, plane-stress, and its strut dimensions were estimated from a render.
 - **Seeds:** secondary conditions use 3 seeds, so individual percentages are suggestive.
+
+### 3.6 Robustness: 20 runs with resampled data splits
+
+The single-split results above use 3 or 5 seeds. **Table 7** repeats every comparison 20 times, each run with
+a new training seed and a new data split (`experiments/seed_study_report.md`). These are the estimates we
+rely on.
+
+**Table 7.** Gain from the physics prior, 20 paired runs per condition.
+
+| condition | OOD diameter gain [95% CI] | OOD ξ gain vs fair baseline [95% CI] | ID diameter gain [95% CI] |
+| --- | --- | --- | --- |
+| COMSOL, clean | +1.4% [−3.0, +5.7], p = 0.57 | **+35.0% [+32.2, +37.9]**, 20/20 ✓ | **−14.0% [−20.7, −7.1]** |
+| COMSOL, 0.03 mm noise | **+7.9% [+4.4, +11.4]**, 18/20 ✓ | **+38.9% [+36.1, +41.5]**, 20/20 ✓ | +9.5% [+2.6, +16.1] |
+| COMSOL, labels at months 0/6/12 | **+9.3% [+5.8, +12.8]**, 18/20 ✓ | **+39.1% [+35.9, +42.4]**, 20/20 ✓ | **+32.8% [+23.9, +40.9]** ✓ |
+| synthetic, clean | −0.5% [−3.4, +2.2], p = 0.90 | **−56.1% [−79.3, −35.1]** (worse) ✓ | **−13.8% [−19.1, −9.1]** ✓ |
+| synthetic, 0.3 mm noise | +3.7% [+0.6, +6.5], p = 0.014 | −38.1% (worse) ✓ | +14.9% ✓ |
+| synthetic, 0.6 mm noise | **+14.9% [+10.8, +18.8]**, 19/20 ✓ | −3.7%, p = 0.93 | +45.5% ✓ |
+| synthetic, 1.0 mm noise | **+29.9% [+24.7, +34.9]**, 20/20 ✓ | **+16.0% [+8.4, +23.6]**, 17/20 ✓ (p = 0.001, borderline) | +59.0% ✓ |
+| synthetic, 6 training designs | +6.0% [+2.7, +9.4], p = 0.002 | −36.1% (worse) ✓ | +4.4% |
+| synthetic, 12 training designs | +6.0% [+2.3, +9.5], p = 0.005 | −32.8% (worse) ✓ | +9.3% |
+| synthetic, 24 / 48 designs | +3.3% / +0.2%, n.s. | worse ✓ | −0.4% / −7.9% |
+
+Gain = 1 − PINNVALVE / data-only (positive = physics helps), mean over 20 runs; each run has its own training seed and its own data split. ✓ = significant after Bonferroni correction over all 48 comparisons (p < 0.001). Full tables, including ID ξ and per-condition win counts: `experiments/seed_study_report.md`.
+
+Three findings hold on both datasets:
+
+- **With clean, dense data the physics prior does not improve diameter prediction,** and it costs about 14%
+  on held-out interior designs.
+- **With noisy or sparse data it improves diameter prediction significantly.** On finite-element data the
+  out-of-distribution gain was 8–9% and the in-distribution gain with sparse labels 33%. On synthetic data
+  the gain rose with noise to 30%.
+- **The hidden-state result depends on the data.** On finite-element data PINNVALVE recovered the martensite
+  fraction on unseen designs 35–39% better than the fair baseline in all 60 runs. On synthetic data it was
+  worse than the fair baseline except at the heaviest noise.
+
+Some single-split numbers moved with 20 runs. The COMSOL noise gain fell from 19.9% to 7.9%, and the
+synthetic data-scarcity gain from 10% to 6% (no longer significant after correction). The in-distribution
+cost on clean data is new: with 5 seeds it was within noise.
 
 ### Figures
 
