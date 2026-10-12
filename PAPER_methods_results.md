@@ -91,11 +91,13 @@ ramps up linearly over the first epochs. The physics term contains:
 **Ablation.** Setting the physics weight to 0 gives a data-only network with the identical architecture.
 
 **Hyperparameters.** The physics weight was chosen as 1.0 using only a validation OOD set (random designs
-outside the interior box, disjoint from the corner test set). Architecture, learning rate and epoch count
-were set by hand and not tuned on any test set.
+outside the interior box, disjoint from the corner test set). On that set it gave an 8% diameter gain, which
+did not carry over to the test corners (Section 3.2). Architecture, learning rate and epoch count were set
+by hand and not tuned on any test set.
 
 **Evaluation.** Diameter error is reported on held-out ID designs and OOD corners. The ξ output is scored
-against the generator's true value, which the network never sees.
+against the generator's true value, which the network never sees, and compared with the post-hoc baseline
+described in Section 2.6.
 
 ### 2.5 Finite-element models (COMSOL)
 
@@ -209,21 +211,29 @@ weight 1.0 ramped over the first 400 epochs. All of these were fixed before any 
   3 seeds.
 - **Noise:** 0.03 mm Gaussian noise on training diameters, 3 seeds.
 - **Benchmark baselines:** the generic VALVEBENCH models were also fit on the same inputs.
+- **20-run study:** the main, noise and sparse-label comparisons were repeated with 20 runs each, every run
+  with its own seed and data split (Section 3.6).
 
 ξ is scored against COMSOL's volume-averaged martensite fraction, which no model is trained on.
 
 **Post-hoc ξ baseline.** The data-only network's ξ output receives no gradient, so it is not a fair
 comparison for PINNVALVE's ξ. The baseline we report instead takes the data-only network's predicted D and
 computes ξ from it after training, with the same equations as the physics loss (suture law and closure
-solved for ξ; the one-sided kinetics bound is not applied, since clipping to it made the baseline worse). The same baseline is reported on synthetic data, where ξ is
-solved from the D → ε mapping, the closure and the Brinson kinetics together.
+solved for ξ; the one-sided kinetics bound is not applied, since clipping to it made the baseline worse).
+The same baseline is reported on synthetic data, where ξ is solved from the D → ε mapping, the closure and
+the Brinson kinetics together.
 
 ### 2.7 Evaluation
 
 - **Metrics:** root-mean-square error (RMSE) and mean absolute error (MAE) in mm, and R² for the
   patient task.
-- **Reporting:** results are the mean ± standard deviation over seeds (population SD for the synthetic tables, sample SD for the COMSOL tables).
-- **20-run study (Section 3.6):** every PINNVALVE comparison was repeated 20 times, each run with its own training seed and its own resampled data split. Physics on and off share each seed and split, so comparisons are paired. We report the mean relative gain with a 95% bootstrap confidence interval (10,000 resamples) and a two-sided Wilcoxon signed-rank test, with a Bonferroni correction over all 48 comparisons (p < 0.001).
+- **Reporting:** results are the mean ± standard deviation over seeds (population SD for the synthetic
+  tables, sample SD for the COMSOL tables).
+- **20-run study (Section 3.6):** every PINNVALVE comparison was repeated 20 times, each run with its own
+  training seed and its own resampled data split. Physics on and off share each seed and split, so
+  comparisons are paired. We report the mean relative gain with a 95% bootstrap confidence interval
+  (10,000 resamples) and a two-sided Wilcoxon signed-rank test, with a Bonferroni correction over all 48
+  comparisons (p < 0.001).
 - **Physics benefit:** reported as the per-seed percentage change in OOD diameter RMSE, with the
   number of seeds in which it was positive.
 - **Leakage prevention:** all splits are by patient or by design, so no individual contributes to two
@@ -260,6 +270,9 @@ wider age range. OOD RMSE is worse than ID RMSE for every model.
 
 ### 3.2 PINNVALVE on synthetic scaffold data
 
+Sections 3.2 and 3.5 report single-split runs (3–5 seeds). Section 3.6 repeats every comparison with 20
+runs and resampled splits; where the two differ, Section 3.6 is the estimate we rely on.
+
 **Table 2.** Synthetic scaffold task, 5 seeds.
 
 | Model | ID diameter RMSE (mm) | OOD diameter RMSE (mm) | OOD ξ RMSE |
@@ -269,7 +282,8 @@ wider age range. OOD RMSE is worse than ID RMSE for every model.
 | Data-only D + closure ξ (post hoc) | — | — | 0.171 ± 0.034 |
 
 **Diameter: no reliable gain.** Adding physics did not reliably improve OOD diameter error
-(−1.1% ± 4.2%, 1 of 5 seeds positive).
+(−1.1% ± 4.2%, 1 of 5 seeds positive). On the validation set used to choose the physics weight the gain
+had been +8%; it did not transfer to the test corners.
 
 **Hidden state: no gain over a fair baseline.** Against the data-only network's own ξ output, physics
 looked 60% better. That output is never trained, however. Passing the data-only network's diameter through
@@ -283,17 +297,21 @@ generator exactly, so ξ follows from diameter and carries no independent inform
 It came from tuning the physics weight on the test set and from reporting training error as test error,
 and it disappeared once both were corrected.
 
-**The physics prior helped most under noise and data scarcity** (3 seeds per condition):
+**The physics prior helped under heavy noise** (single split, 3 seeds per condition;
+`experiments/robustness_report.md`):
 - **Noise:** with heavy training-label noise (1.0 mm) PINNVALVE's OOD diameter error was 30% lower
-  (1.94 vs 2.78 mm, 3 of 3 seeds); at 0.6 mm 7.5% lower (2 of 3); at 0.3 mm and below, no gain. PINNVALVE's
-  error stayed flat as noise grew, while the data-only network's rose 41%.
-- **Scarcity:** with 6 and 12 training designs the gain was 10% and 8% (3 of 3 seeds each); from 24
-  designs upward there was none (`experiments/robustness_report.md`).
+  (1.94 vs 2.78 mm); at 0.3 mm and below there was no gain. PINNVALVE's error stayed flat as noise grew,
+  while the data-only network's rose 41%. With 20 runs (Section 3.6): +30% at 1.0 mm and +15% at 0.6 mm,
+  both significant.
+- **Scarcity:** with 6 and 12 training designs the gain was 10% and 8%; from 24 designs upward there was
+  none. With 20 runs the 6- and 12-design gains are 6% each and do not survive the multiple-comparison
+  correction.
 - **Sparse labels:** with diameter labelled only at months 0 and 12, held-out RMSE fell from 1.31 to
-  0.82 mm.
-- **Far extrapolation:** with each design range widened by 25%, PINNVALVE's ξ error was 43% higher than
-  the post-hoc baseline (0.289 vs 0.202; 0 of 5 seeds better). Against the untrained ξ output it had
-  appeared 44% lower.
+  0.82 mm (5 seeds; `experiments/extrapolation_and_sparsity_report.md`).
+
+**Far extrapolation:** with each design range widened by 25%, PINNVALVE's ξ error was 43% higher than the
+post-hoc baseline (0.289 vs 0.202; 0 of 5 seeds better). Against the untrained ξ output it had appeared 44%
+lower.
 
 **Material constants:** with the literature nitinol preset, both conclusions were unchanged: no reliable
 diameter gain (OOD MAE change −1.4% ± 7.3%) and no ξ gain over the post-hoc baseline (0.235 vs 0.206).
@@ -377,7 +395,8 @@ than simple beam theory predicts: 9.7% at 0.2 mm width.
 | 12 cells, 10 mm × 0.25 mm | 5.0–5.2% | never | 1.17 |
 
 The sutures are tied one after another around the middle row, so each carries the row's full hoop
-tension. For the two proposed designs, this is 1.17 N (10 mm struts) and 17.7 N (taper).
+tension. For the two proposed designs, this is 1.17 N (10 mm struts; the mean of the standard-mesh, fine-mesh
+and larger-fillet runs, which range from 1.12 to 1.24 N) and 17.7 N (taper).
 
 **Longer struts fix the overstrain; tapering nearly does:**
 
@@ -416,22 +435,27 @@ two quantities it is never fitted to:
 | PINNVALVE | 0.0090 ± 0.0011 | 0.086 ± 0.011 | 0.008 ± 0.001 | 0.047 ± 0.004 |
 | Data-only D + closure ξ (post hoc) | — | — | 0.006 ± 0.002 | 0.076 ± 0.009 |
 
-The pattern from synthetic data replicates on independent finite-element data:
+On independent finite-element data the diameter pattern matches the synthetic one, but the hidden-state
+result does not:
 
-- **Diameter: no reliable gain.** The OOD change was +7.9% ± 16.0% (3 of 5 seeds positive).
+- **Diameter: no reliable gain.** The OOD change was +7.9% ± 16.0% (3 of 5 seeds positive); with 20 runs,
+  +1.4% (not significant).
 - **Hidden state: a consistent gain over a fair baseline.** PINNVALVE recovered COMSOL's martensite
   fraction to 0.047 RMSE on unseen designs (Figure 3). The fair comparison is the data-only network's
   diameter passed through the same closure after training (0.076), not its untrained ξ output (0.32), so
   the gain is 38%, not 85%. PINNVALVE was better in every seed of every condition with at least 8 training
   designs, but not with 4 (1 of 3 seeds). On held-out interior designs the baseline was as good (0.006 vs
   0.008), so the gain is in extrapolation. It is not explained by diameter accuracy, which differed by
-  under 10%. Unlike the synthetic result, this one survives the fair baseline.
-- **Noise: the clearest diameter benefit.** With 0.03 mm noise on training diameters, OOD diameter error
-  fell 19.9% (0.119 → 0.093 mm; 3 of 3 seeds).
-- **Sparse labels: a moderate benefit.** With diameter labelled only at months 0, 6 and 12, held-out
-  error fell 34% (0.024 → 0.016 mm) and OOD error 11.6% (2 of 3 seeds).
-- **Scarcity: a weaker benefit than on synthetic data.** Gains were +17.8%, +5.0% and +9.1% with 8, 16
-  and 32 training designs (each 2 of 3 seeds positive). There was no gain with 4 designs (−3.2%).
+  under 10%. Unlike the synthetic result, this one survives the fair baseline. With 20 runs it is +35%
+  [32, 38], better in all 20, and +39% with noise or sparse labels.
+- **Noise: a diameter benefit.** With 0.03 mm noise on training diameters, OOD diameter error fell 19.9%
+  in the single split (3 seeds); with 20 runs the gain is 7.9% [4.4, 11.4], significant.
+- **Sparse labels: the largest diameter benefit.** With diameter labelled only at months 0, 6 and 12,
+  held-out error fell 34% and OOD error 11.6% in the single split; with 20 runs, 33% [24, 41] and
+  9.3% [5.8, 12.8], both significant.
+- **Scarcity (single split only):** gains were +17.8%, +5.0% and +9.1% with 8, 16 and 32 training designs
+  (each 2 of 3 seeds positive), and none with 4 designs (−3.2%). This condition was not repeated in the
+  20-run study.
 
 **Limitations.**
 - **The COMSOL device is idealised:** a solid ring with sutures 1000× stiffer than realistic. Realistic
@@ -446,7 +470,8 @@ The pattern from synthetic data replicates on independent finite-element data:
   ξ recovery tests the reduced-order form and the training method, not independently chosen constants.
 - **Not modelled:** fatigue under cardiac cycling, plasticity, and the frame-end crowns.
 - **The lattice is idealised:** flat, plane-stress, and its strut dimensions were estimated from a render.
-- **Seeds:** secondary conditions use 3 seeds, so individual percentages are suggestive.
+- **Seeds:** the single-split secondary conditions use 3 seeds; the 20-run study (Section 3.6) supersedes
+  them for every condition it covers. COMSOL data scarcity was not repeated with 20 runs.
 
 ### 3.6 Robustness: 20 runs with resampled data splits
 
@@ -469,9 +494,11 @@ rely on.
 | synthetic, 12 training designs | +6.0% [+2.3, +9.5], p = 0.005 | −32.8% (worse) ✓ | +9.3% |
 | synthetic, 24 / 48 designs | +3.3% / +0.2%, n.s. | worse ✓ | −0.4% / −7.9% |
 
-Gain = 1 − PINNVALVE / data-only (positive = physics helps), mean over 20 runs; each run has its own training seed and its own data split. ✓ = significant after Bonferroni correction over all 48 comparisons (p < 0.001). Full tables, including ID ξ and per-condition win counts: `experiments/seed_study_report.md`.
+Gain = 1 − PINNVALVE / data-only (positive = physics helps), mean over 20 runs; each run has its own
+training seed and its own data split. ✓ = significant after Bonferroni correction over all 48 comparisons
+(p < 0.001). Full tables, including ID ξ and per-condition win counts: `experiments/seed_study_report.md`.
 
-Three findings hold on both datasets:
+Three findings follow. The first two hold on both datasets; the third does not:
 
 - **With clean, dense data the physics prior does not improve diameter prediction,** and it costs about 14%
   on held-out interior designs.
