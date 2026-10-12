@@ -4,7 +4,7 @@ Read this out loud, in your own words. If you can't explain a line without looki
 
 ## The 30-second version
 
-Children with congenital heart disease often need a new pulmonary valve, and today's valves don't grow, so they outgrow them. I built a physics-informed neural network (PINNVALVE) that predicts how a growth-adaptive nitinol scaffold expands over 12 months from four design choices, and a benchmark (ValveBench) to test it fairly. My question was whether putting the real nitinol physics into the network's training makes it better than the same network trained on data alone. The honest answer: it does **not** improve the diameter prediction on new designs. On finite-element data it recovers an internal variable, the martensite fraction, on unseen designs with 38% less error than a fair data-only baseline. On synthetic data that advantage disappeared once I made the baseline fair.
+Children with congenital heart disease often need a new pulmonary valve, and today's valves don't grow, so they outgrow them. I built a physics-informed neural network (PINNVALVE) that predicts how a growth-adaptive nitinol scaffold expands over 12 months from four design choices, and a benchmark (ValveBench) to test it fairly. My question was whether putting the real nitinol physics into the network's training makes it better than the same network trained on data alone. The honest answer, from 20 paired runs: with clean, plentiful data it does **not** improve the diameter prediction on new designs. With noisy or sparse measurements, which is what a child's follow-up looks like, it does, significantly. And on finite-element data it recovers an internal variable, the martensite fraction, on unseen designs 35% better than a fair data-only baseline, in all 20 runs. The simulations also showed a design problem: dissolving sutures release the frame within months, while the child's annulus takes about 15 years to grow.
 
 ## Explain the Brinson equation
 
@@ -24,9 +24,9 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 
 ## Explain the null diameter result
 
-- **What I found:** on designs outside the training range, diameter error is about the same with and without the physics term (OOD MAE 1.32 vs 1.32 mm; −0.5% ± 4.2%; better in only 1 of 5 seeds).
-- **Why that's believable:** diameter is directly supervised and, with enough clean data, a flexible network already learns it. Physics has little to add there. It helps where the data can't: the variable you never observe, and when data is scarce or noisy.
-- **Where physics did help:** about 10% better OOD diameter error with only 6 training designs (8% with 12, none from 24 up); 30% better at the heaviest measurement noise (none at low noise); on COMSOL data, OOD ξ 38% lower than a fair baseline (0.047 vs 0.076; no gain in-distribution).
+- **What I found:** with clean data, on designs outside the training range, diameter error is about the same with and without the physics term (20 runs: −0.5% synthetic, +1.4% COMSOL, neither significant). In-distribution it is actually about 14% worse.
+- **Why that's believable:** diameter is directly supervised and, with enough clean data, a flexible network already learns it. Physics has little to add there, and the extra constraint costs a little. It helps where the data can't: noisy or sparse measurements, and, on finite-element data, the variable you never observe.
+- **Where physics did help (20 runs, all significant):** COMSOL with only 3 measurements per design, +33% in-distribution and +9% on unseen designs; COMSOL with noise, +8%; synthetic at the heaviest noise, +30%; COMSOL martensite on unseen designs, +35–39% over the fair baseline. With very few training designs the gain (+6%) does not survive the significance correction, so I don't claim it.
 - **Where I thought it helped and it didn't:** on synthetic data ξ looked 60% better, but the data-only network's ξ output was never trained. Given the same equations after training, its diameter gives ξ at 0.171 vs PINNVALVE's 0.206. I caught this myself; it is the same kind of check as the 13% bug.
 - **How to frame it:** "I tested a popular claim, that physics always helps, and found where it does and doesn't in this system." Don't call the diameter result a failure, and don't hide it.
 
@@ -55,15 +55,18 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
   - Convergence checks on mesh and step size, plus a no-dissolution control.
 - **PINNVALVE on COMSOL data (the non-circular test).** The data come from COMSOL; the physics loss is my
   reduced-order ring model (hoop equilibrium, suture law, 1D constitutive law), not COMSOL's equations.
-  - Diameter on unseen designs: no reliable gain (+7.9% ± 16%), the same as on synthetic data.
-  - Hidden martensite fraction: 0.047 RMSE vs 0.076 for the data-only network's diameter passed through the same physics equations (fair baseline; 0.32 against its untrained ξ output). Every seed with ≥ 8 training designs, OOD only.
+  - Diameter on unseen designs with clean data: no gain (20 runs: +1.4%, not significant), the same as on synthetic data.
+  - Hidden martensite fraction on unseen designs: 35% better than the fair baseline (the data-only network's diameter passed through the same physics equations), in all 20 runs; 39% with noise or sparse labels. Against its untrained ξ output it would look much bigger, which is why I don't use that comparison.
   - Disclosure: the physics loss uses COMSOL's exact geometry, suture and material parameters.
-  - With noisy measurements: 20% lower diameter error, all seeds.
+  - With noisy measurements: 8% lower diameter error on unseen designs; with only 3 measurements per design, 33% lower in-distribution (20 runs each).
 - **Device findings.**
   - Realistic sutures can't hold a solid ring crimped.
   - Halving the rendered lattice's diameter overstrains the junctions (12.6% vs a 6–8% limit).
   - 10 mm struts fix it, at the cost of tall cells and low outward force. Tapered struts get the original
     layout to a borderline 6.5%.
+  - Sutures break rather than soften. Predicted release: about 3–4 months for the taper, 6–8 months for
+    the 10 mm design (all at once), against about 15 years of annular growth. That timescale mismatch is
+    the main design problem the project found.
 - **What it doesn't show.**
   - The COMSOL ring is an idealised stand-in for the lattice (sutures 1000× stiffer than realistic).
   - The suture-decay law is assumed, and is shared between the simulator and my physics loss.
@@ -78,10 +81,10 @@ Be ready to say what's **not** included: no forward transformation, no temperatu
 
 - **Why synthetic data?** No public dataset links scaffold design to expansion, and I don't have lab access. I made the synthetic side as literature-grounded as I could and labelled everything.
 - **Is this novel?** The physics-informed method isn't new. The application (Brinson/Auricchio-Sacco physics in a network for a growth-adaptive pediatric valve scaffold) and the rigorous, honest test of when it helps appear to be, based on my literature search. I can't claim nobody has done it anywhere.
-- **What would change your conclusion?** Real measured data (bench tests of a frame) where physics improves diameter error on unseen designs. On COMSOL data it only reliably did so under measurement noise.
+- **What would change your conclusion?** Real measured data (bench tests of a frame) where physics improves diameter error on unseen designs with clean data. On COMSOL data it only did so with noisy or sparse measurements.
 - **Did you tune hyperparameters?** Physics weight was swept (0.1–10) on a separate validation set. It looked +8% better there, and that did not transfer to the test set (−1.1%). Architecture, learning rate and epochs were set by hand and not tuned; I say so.
 - **Is it clinically useful?** No. It's a computational design tool; benchtop, hydrodynamic and biological validation are required first.
-- **Why 5 seeds?** Single runs mislead. All results are mean ± SD across 5 seeds and I report how many seeds went each way.
+- **How many runs?** 20 paired runs per comparison, each with its own seed and its own data split, with 95% confidence intervals, a Wilcoxon test, and a Bonferroni correction over 48 comparisons. Going from 3–5 seeds to 20 changed some numbers: the COMSOL noise gain fell from 20% to 8%, and the small-data gain stopped being significant. I report the 20-run numbers.
 
 ## Numbers to know cold (20 paired runs, resampled splits; RESULTS.md §0)
 

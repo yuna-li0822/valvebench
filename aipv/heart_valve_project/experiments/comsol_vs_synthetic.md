@@ -29,7 +29,7 @@ data. They are:
 
 - the physics loss does not reliably improve out-of-distribution diameter error
 - on synthetic data, its apparent martensite gain disappears against a fair post-hoc baseline (RESULTS.md §5b)
-- it helps when data are scarce or noisy
+- it helps when measurements are noisy or sparse (20 paired runs, RESULTS.md §0)
 
 These findings are about whether a physics prior helps a network learn a given physical law. None of the COMSOL
 findings changes that comparison.
@@ -155,15 +155,19 @@ Forces scale with the assumed 0.4 mm strut thickness.
 
 PINNVALVE was retrained on 136 COMSOL designs of the ring (`valvebench/models/pinn_comsol.py`,
 RESULTS.md §7c). The physics loss is a reduced-order model of the ring, not COMSOL's equations
-(`valvebench/physics/ring_sma.py`). The method conclusions replicate on this independent data:
+(`valvebench/physics/ring_sma.py`). The diameter conclusions replicate on this independent data; the
+hidden-state conclusion does not (it holds here and not on synthetic data). With 20 paired runs (RESULTS.md §0):
 
-- **No reliable gain in diameter accuracy on unseen designs:** +7.9% ± 16.0%.
+- **No gain in diameter accuracy on unseen designs with clean data:** +1.4% [−3.0, +5.7] (single split: +7.9% ± 16.0%).
 - **Consistent recovery of the never-supervised martensite fraction:** 0.047 OOD RMSE vs 0.076 for the
-  data-only network's diameter passed through the same closure (0.32 against its untrained ξ output).
+  data-only network's diameter passed through the same closure (0.32 against its untrained ξ output);
+  with 20 runs, +35% [32, 38], better in all 20, and +39% with noise or sparse labels.
   The physics loss uses COMSOL's exact geometry, suture and material parameters, so this tests the
   reduced-order form and the training method, not independently chosen constants.
-- **The clearest diameter benefit is under measurement noise:** +19.9%, 3/3 seeds.
+- **Diameter benefits with noisy or sparse measurements:** +7.9% [4.4, 11.4] on unseen designs with
+  0.03 mm noise; +9.3% on unseen and +33% on held-out designs with labels only at months 0, 6 and 12
+  (single split had shown 19.9% for noise).
 
 So the circularity objection to the synthetic-only results (same equations in the data and the loss)
-no longer applies to these three conclusions. It still applies to the absolute device predictions
+no longer applies to these conclusions. It still applies to the absolute device predictions
 discussed above.

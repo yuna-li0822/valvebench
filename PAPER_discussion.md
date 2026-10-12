@@ -124,9 +124,11 @@ These conditions match clinical follow-up, where a child's valve diameter is mea
 only a few times a year, with measurement error. A model that infers the scaffold's internal state from
 such measurements could, in principle, indicate how much expansion capacity remains.
 
-**This replication is a stronger test than the synthetic experiments alone.** The finite-element data were
+**The finite-element test is stronger than the synthetic experiments alone.** The finite-element data were
 not produced by the equations in the physics loss. Before this test, the synthetic results could only show
-that training converged.
+that training converged. The two datasets agree on diameter and disagree on the hidden state, which is
+itself informative: on synthetic data the physics equations invert the generator exactly, so a fitted
+diameter already determines ξ.
 
 **Two caveats.**
 - The suture-decay law is shared by the simulator and the physics loss, so it is not independently
@@ -136,7 +138,7 @@ that training converged.
   is therefore expected once diameter is fitted. For that reason the comparison we report is against a
   data-only network given the same equations after training, not against its untrained ξ output. The
   first comparison inflates the gain (0.32 → 0.047); the fair one shows a smaller but consistent gain
-  on out-of-distribution designs (0.076 → 0.047) and none on interior designs.
+  on out-of-distribution designs (35–39%, all 60 runs) and, with clean data, none on interior designs.
 
 ### 4.4 Limitations
 
@@ -151,12 +153,15 @@ that training converged.
   frame ends, uses strut dimensions estimated from a render, and has no plasticity.
 - **Fatigue is not modelled:** a frame sees tens of millions of cardiac cycles per year.
 - **The patient model describes healthy children,** not children with congenital heart disease.
-- **Seeds:** secondary experiments use three seeds, so individual percentages are suggestive.
+- **Statistics:** headline comparisons use 20 paired runs with resampled splits and a multiple-comparison
+  correction (Section 3.6). Finite-element data scarcity was run with three seeds only.
 
 ### 4.5 Future work
 
-1. **Replace the assumed suture law with published data.** Use manufacturers' strength-retention curves,
-   including failure, and then compare release timing with annular growth directly.
+1. **Replace the assumed suture law with a break model.** Section 4.1 estimates release times from the USP
+   minimum strength and PDS II retention; the next step is measured retention curves with strength
+   scatter between sutures (the weakest one sets the release), built into both the simulator and the
+   physics loss.
 2. **Couple the lattice cell to a suture model,** to simulate the proposed designs' full release with
    realistic sutures, and generate a lattice-based training set for PINNVALVE.
 3. **Test staged release and slower-degrading materials** against the PHN growth curve.

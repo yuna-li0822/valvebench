@@ -156,7 +156,8 @@ to units of 0.1 mm.
 **Evaluation.** `experiments/pinn_comsol_train.py` uses the same splits as
 `valvebench.datasets.comsol.comsol_splits`: 72 train, 24 val and 24 test interior designs (split by
 design) and 16 OOD corners. It runs the main ablation (5 seeds) and the data-scarcity, sparse-label and
-noise conditions (3 seeds each). `valvebench/evaluation/generate_comsol_leaderboard.py` adds the
+noise conditions (3 seeds each). `experiments/seed_study.py` repeats the main, noise and sparse-label
+conditions with 20 runs, each with its own seed and resampled split (`comsol_splits(seed=1000 + run)`). `valvebench/evaluation/generate_comsol_leaderboard.py` adds the
 generic baselines and writes `comsol_leaderboard.md`.
 
 ## Evaluation
@@ -165,5 +166,7 @@ generic baselines and writes `comsol_leaderboard.md`.
 - `valvebench/evaluation/generate_leaderboard.py`: calls `run_multi_seed` for every registered model, 5 seeds, writes `leaderboard.md` with ID and OOD columns.
 - `valvebench/evaluation/plots.py`: predicted-vs-actual, residuals, ID-vs-OOD bar comparison, physics-weight sweep, training curves, data-efficiency — lazy-imports matplotlib (`viz` extra).
 - `experiments/pinn_train.py`: multi-seed ablation on the corrected, held-out splits; writes `experiments/pinnvalve_ablation_report.md` and `.json`.
-- `experiments/generate_figures.py`: generates every figure in `experiments/figures/` from real trained models.
+- `experiments/generate_figures.py`: patient figures, leaderboard comparison, physics-weight sweep and training curves. Other figures come from `robustness_experiments.py` (data efficiency), `pinn_comsol_figure.py` (ξ recovery), `generate_extra_figures.py` (results table, data overview) and `comsol_ring_analysis.py` (COMSOL device figures).
+- `experiments/seed_study.py`: the 20-run study. Each run has its own training seed and resampled split; physics on and off are paired. Reports the mean relative gain with a 95% bootstrap CI (10,000 resamples), a two-sided Wilcoxon signed-rank test, and marks results significant after Bonferroni correction over all comparisons. Resumable; writes `seed_study_report.md`.
+- `experiments/robustness_experiments.py`, `xi_posthoc_synthetic.py`, `suture_release_time.py`: single-split noise/scarcity runs, the fair ξ baseline on synthetic data, and predicted suture release times.
 - `tests/test_leakage.py`: dedicated regression tests for every leakage vector found during this project's audits (patient-level, scaffold-design-level, age-range, and normalization-statistics leakage).
