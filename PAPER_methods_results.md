@@ -95,6 +95,10 @@ outside the interior box, disjoint from the corner test set). On that set it gav
 did not carry over to the test corners (Section 3.2). Architecture, learning rate and epoch count were set
 by hand and not tuned on any test set.
 
+**20-run study.** The main ablation, four training-noise levels (0.05, 0.3, 0.6 and 1.0 mm) and four
+training-set sizes (6, 12, 24 and 48 designs) were repeated with 20 runs each, every run with its own seed and
+its own interior split; the 16 OOD corners are fixed (Section 3.6).
+
 **Evaluation.** Diameter error is reported on held-out ID designs and OOD corners. The ξ output is scored
 against the generator's true value, which the network never sees, and compared with the post-hoc baseline
 described in Section 2.6.
@@ -229,8 +233,8 @@ the Brinson kinetics together.
   patient task.
 - **Reporting:** results are the mean ± standard deviation over seeds (population SD for the synthetic
   tables, sample SD for the COMSOL tables).
-- **20-run study (Section 3.6):** every PINNVALVE comparison was repeated 20 times, each run with its own
-  training seed and its own resampled data split. Physics on and off share each seed and split, so
+- **20-run study (Section 3.6):** the main PINNVALVE comparisons were repeated 20 times, each run with its
+  own training seed and its own resampled data split. Physics on and off share each seed and split, so
   comparisons are paired. We report the mean relative gain with a 95% bootstrap confidence interval
   (10,000 resamples) and a two-sided Wilcoxon signed-rank test, with a Bonferroni correction over all 48
   comparisons (p < 0.001).
@@ -270,7 +274,7 @@ wider age range. OOD RMSE is worse than ID RMSE for every model.
 
 ### 3.2 PINNVALVE on synthetic scaffold data
 
-Sections 3.2 and 3.5 report single-split runs (3–5 seeds). Section 3.6 repeats every comparison with 20
+Sections 3.2 and 3.5 report single-split runs (3–5 seeds). Section 3.6 repeats the main comparisons with 20
 runs and resampled splits; where the two differ, Section 3.6 is the estimate we rely on.
 
 **Table 2.** Synthetic scaffold task, 5 seeds.
@@ -475,9 +479,10 @@ result does not:
 
 ### 3.6 Robustness: 20 runs with resampled data splits
 
-The single-split results above use 3 or 5 seeds. **Table 7** repeats every comparison 20 times, each run with
-a new training seed and a new data split (`experiments/seed_study_report.md`). These are the estimates we
-rely on.
+The single-split results above use 3 or 5 seeds. **Table 7** repeats the main comparisons 20 times, each run
+with a new training seed and a new data split (`experiments/seed_study_report.md`). These are the estimates we
+rely on. Synthetic sparse labels, far extrapolation, the literature constants and COMSOL data scarcity were
+not repeated.
 
 **Table 7.** Gain from the physics prior, 20 paired runs per condition.
 
@@ -501,7 +506,7 @@ training seed and its own data split. ✓ = significant after Bonferroni correct
 Three findings follow. The first two hold on both datasets; the third does not:
 
 - **With clean, dense data the physics prior does not improve diameter prediction,** and it costs about 14%
-  on held-out interior designs.
+  on held-out interior designs (significant after correction on synthetic data; p = 0.002 on COMSOL).
 - **With noisy or sparse data it improves diameter prediction significantly.** On finite-element data the
   out-of-distribution gain was 8–9% and the in-distribution gain with sparse labels 33%. On synthetic data
   the gain rose with noise to 30%.

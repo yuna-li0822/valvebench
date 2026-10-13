@@ -1,10 +1,10 @@
 # RESULTS
 
-This is the full accounting: what was measured, what changed between the first and second audit passes, and why. Numbers are pulled directly from generated artifacts (`leaderboard.md`, `experiments/pinnvalve_ablation_report.md`, `experiments/pinnvalve_ablation_results.json`) — nothing here is hand-typed without a corresponding regeneratable source.
+This is the full accounting: what was measured, what changed between the first and second audit passes, and why. Numbers are pulled directly from generated artifacts (`experiments/seed_study_report.md`, `leaderboard.md`, `experiments/pinnvalve_ablation_report.md`, `experiments/pinn_comsol_report.md` and the other reports cited per section) — nothing here is hand-typed without a corresponding regeneratable source.
 
 ## 0. Headline numbers: 20-run study
 
-`experiments/seed_study.py` reruns every PINNVALVE comparison 20 times. Each run uses its own training seed **and** its own resampled data split, so the intervals cover both training randomness and which designs land in training. Physics on and off share the seed and split, so comparisons are paired (95% bootstrap CI of the mean gain; two-sided Wilcoxon signed-rank test). **These supersede the 3- and 5-seed, single-split numbers in §4–§7c**, which are kept below for traceability.
+`experiments/seed_study.py` reruns the main PINNVALVE comparisons 20 times: on COMSOL the main ablation, training noise and sparse labels; on synthetic data the main ablation, four training-noise levels and four training-set sizes. Each run uses its own training seed **and** its own resampled data split, so the intervals cover both training randomness and which designs land in training. Physics on and off share the seed and split, so comparisons are paired (95% bootstrap CI of the mean gain; two-sided Wilcoxon signed-rank test). **For these conditions they supersede the 3- and 5-seed, single-split numbers in §4–§7c**, which are kept below for traceability. Not repeated with 20 runs: COMSOL data scarcity, synthetic sparse labels, far extrapolation and the literature material constants.
 
 | condition | OOD diameter gain [95% CI] | OOD ξ gain vs fair baseline [95% CI] | ID diameter gain [95% CI] |
 | --- | --- | --- | --- |
@@ -23,7 +23,7 @@ Gain = 1 − PINNVALVE / data-only (positive = physics helps), mean over 20 runs
 
 **What this establishes:**
 
-1. **Clean, dense data: physics does not help diameter and costs a little in-distribution.** On unseen corner designs the change is about zero on both datasets; on held-out interior designs PINNVALVE is about 14% worse on both (both significant).
+1. **Clean, dense data: physics does not help diameter and costs a little in-distribution.** On unseen corner designs the change is about zero on both datasets; on held-out interior designs PINNVALVE is about 14% worse on both (significant after correction on synthetic data; p = 0.002 on COMSOL, which misses the corrected threshold).
 2. **Noisy or sparse data: physics helps diameter, significantly.** On COMSOL, +8% (noise) and +9% (sparse labels) on unseen designs and +33% in-distribution with sparse labels. On synthetic data the gain grows with noise: +15% at 0.6 mm and +30% at 1.0 mm. With very few designs (6–12) the gain is about +6%, but it does not survive the multiple-comparison correction.
 3. **Hidden martensite: a robust gain on finite-element data only.** On COMSOL, PINNVALVE beats the fair baseline on unseen designs by 35–39% in all 60 runs, in every condition. On synthetic data it is worse than the fair baseline everywhere except at the heaviest noise (+16%).
 
